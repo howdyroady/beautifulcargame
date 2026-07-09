@@ -19,8 +19,9 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Metallic PBR materials (car paint, chrome rims) render near-black without reflections to sample —
-  // a cheap generated room environment fixes that without needing a real HDRI asset.
+  // Baseline scene lighting fill: PBR materials at any real metalness/roughness read far too dark
+  // without an environment map to sample, even for the flat platform/hazard meshes, not just the
+  // car's metal parts. A generated room environment is a cheap stand-in for a real HDRI.
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   pmrem.dispose();

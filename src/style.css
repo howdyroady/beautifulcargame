@@ -38,16 +38,18 @@ canvas {
 }
 
 .menu-title {
-  font-size: 3rem;
+  font-size: clamp(1.7rem, 8vw, 3rem);
   font-weight: 900;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   margin: 0;
   color: #f2f2f4;
   text-shadow: 0 0 24px rgba(255, 70, 60, 0.55);
+  text-align: center;
+  max-width: 100%;
 }
 
 .menu-title.small {
-  font-size: 2rem;
+  font-size: clamp(1.4rem, 6vw, 2rem);
 }
 
 .menu-title span {
@@ -58,6 +60,30 @@ canvas {
   color: #a7abb6;
   max-width: 32rem;
   margin: 0;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(20, 22, 28, 0.6);
+  padding: 0.3rem;
+  border-radius: 0.7rem;
+}
+
+.mode-btn {
+  padding: 0.55rem 1.3rem;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #a7abb6;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.mode-btn.active {
+  background: #ff4a3c;
+  color: white;
 }
 
 .menu-buttons {
@@ -113,7 +139,7 @@ canvas {
 }
 
 .lobby-code {
-  font-size: 3rem;
+  font-size: clamp(2rem, 12vw, 3rem);
   font-weight: 900;
   letter-spacing: 0.3em;
   color: #40e0a0;
@@ -201,4 +227,83 @@ canvas {
 
 .hud-center-text.countdown {
   font-size: 3rem;
+}
+
+#app, canvas {
+  touch-action: none;
+}
+
+.touch-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.touch-joy-base {
+  position: absolute;
+  left: 1.4rem;
+  bottom: 1.4rem;
+  width: 8.5rem;
+  height: 8.5rem;
+  border-radius: 50%;
+  background: rgba(30, 33, 42, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-joy-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3.6rem;
+  height: 3.6rem;
+  margin-left: -1.8rem;
+  margin-top: -1.8rem;
+  border-radius: 50%;
+  background: rgba(255, 74, 60, 0.85);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transition: transform 0.02s linear;
+}
+
+.touch-brake {
+  position: absolute;
+  right: 1.6rem;
+  bottom: 1.8rem;
+  width: 5.2rem;
+  height: 5.2rem;
+  border-radius: 50%;
+  background: rgba(30, 33, 42, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  color: #f2f2f4;
+  font-weight: 800;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.touch-brake.active {
+  background: rgba(255, 74, 60, 0.55);
+}
+
+.race-place {
+  font-weight: 900;
+  font-size: 1.4rem;
+  color: #d7d9e0;
+}
+
+.race-place.leader {
+  color: #40e0a0;
+}
+
+.race-laps {
+  font-size: 0.8rem;
+  color: #a7abb6;
+  font-weight: 700;
 }

@@ -2,13 +2,17 @@ import './style.css';
 import { createSceneRig, updateArenaCamera } from './sceneSetup';
 import { Match } from './game/matchState';
 import { MAX_HP } from './game/carEntity';
+import { RaceMatch } from './game/raceState';
 import { KeyboardInputSource, NEUTRAL_INPUT, type CarInput } from './input/input';
 import { Hud } from './ui/hud';
-import { MainMenu, LobbyScreen } from './ui/menus';
+import { RaceHud } from './ui/raceHud';
+import { MainMenu, LobbyScreen, type GameMode } from './ui/menus';
 import { NetSession } from './net/peer';
 import { ClientView } from './net/clientView';
+import { RaceClientView } from './net/raceClientView';
 import { INITIAL_RADIUS } from './arena/arena';
-import type { StateMessage } from './net/protocol';
+import type { StateMessage, RaceStateMessage } from './net/protocol';
+import { TouchControls, isTouchDevice, combineInputs } from './ui/touchControls';
 
 const app = document.getElementById('app')!;
 const rig = createSceneRig(app);
@@ -28,13 +32,14 @@ function showMenu() {
   clearScene();
   rig.camera.position.set(0, 16, 20);
   const menu = new MainMenu(app, {
-    onLocal: () => {
+    onLocal: (mode) => {
       menu.destroy();
-      startLocalMatch();
+      if (mode === 'race') startLocalRace();
+      else startLocalMatch();
     },
-    onHost: () => {
+    onHost: (mode) => {
       menu.destroy();
-      startHost();
+      startHost(mode);
     },
     onJoin: (code) => {
       menu.destroy();
@@ -76,7 +81,30 @@ function startLocalMatch() {
   frameHandle = requestAnimationFrame(loop);
 }
 
-function startHost() {
+function startLocalRace() {
+  clearScene();
+  const hud = new RaceHud(app, ['SPIELER 1', 'SPIELER 2']);
+  const race = new RaceMatch(rig.scene, {
+    onPhaseChange: (phase, data) => hud.setPhase(phase, data),
+    onProgress: (laps, places) => hud.setProgress(laps, places),
+  });
+  const inputA = new KeyboardInputSource('wasd');
+  const inputB = new KeyboardInputSource('arrows');
+
+  let last = performance.now();
+  function loop(now: number) {
+    frameHandle = requestAnimationFrame(loop);
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+
+    race.update(dt, inputA.read(), inputB.read());
+    updateArenaCamera(rig.camera, race.cars.map((c) => ({ x: c.body.position.x, z: c.body.position.z })));
+    rig.renderer.render(rig.scene, rig.camera);
+  }
+  frameHandle = requestAnimationFrame(loop);
+}
+
+function startHost(mode: GameMode) {
   clearScene();
   const lobby = new LobbyScreen(app, () => {
     lobby.destroy();
@@ -95,23 +123,49 @@ function startHost() {
     onConnected: () => {
       lobby.destroy();
       clearScene();
+      const inputA = new KeyboardInputSource('wasd');
+      const touch = isTouchDevice() ? new TouchControls(app) : null;
+      let sendAccumulator = 0;
+      let last = performance.now();
+
+      if (mode === 'race') {
+        const hud = new RaceHud(app, ['DU (HOST)', 'GEGNER']);
+        const race = new RaceMatch(rig.scene, {
+          onPhaseChange: (phase, data) => hud.setPhase(phase, data),
+          onProgress: (laps, places) => hud.setProgress(laps, places),
+        });
+        function loop(now: number) {
+          frameHandle = requestAnimationFrame(loop);
+          const dt = Math.min(0.05, (now - last) / 1000);
+          last = now;
+          const localInput = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
+          race.update(dt, localInput, remoteInput);
+          sendAccumulator += dt;
+          if (sendAccumulator >= 1 / 25) {
+            sendAccumulator = 0;
+            session.send(race.getSnapshot());
+          }
+          updateArenaCamera(rig.camera, race.cars.map((c) => ({ x: c.body.position.x, z: c.body.position.z })));
+          rig.renderer.render(rig.scene, rig.camera);
+        }
+        frameHandle = requestAnimationFrame(loop);
+        return;
+      }
+
       const hud = new Hud(app, ['DU (HOST)', 'GEGNER']);
       const match = new Match(rig.scene, {
         onPhaseChange: (phase, data) => hud.setPhase(phase, data),
         onHpChange: (hp) => hud.setHp(hp, MAX_HP),
         onScoreChange: (score) => hud.setScore(score),
       });
-      const inputA = new KeyboardInputSource('wasd');
-
-      let sendAccumulator = 0;
       let matchEndedAt = 0;
-      let last = performance.now();
       function loop(now: number) {
         frameHandle = requestAnimationFrame(loop);
         const dt = Math.min(0.05, (now - last) / 1000);
         last = now;
 
-        match.update(dt, inputA.read(), remoteInput);
+        const localInput = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
+        match.update(dt, localInput, remoteInput);
         if (match.phase === 'matchEnd') {
           if (!matchEndedAt) matchEndedAt = now;
           if (now - matchEndedAt > 4000) {
@@ -138,6 +192,7 @@ function startHost() {
   });
 }
 
+/** The joining client doesn't pick a mode — it detects derby vs. race from the shape of the host's first snapshot. */
 function startJoin(code: string) {
   clearScene();
   const lobby = new LobbyScreen(app, () => {
@@ -145,18 +200,22 @@ function startJoin(code: string) {
     showMenu();
   });
 
-  let latestState: StateMessage | null = null;
+  let latestDerbyState: StateMessage | null = null;
+  let latestRaceState: RaceStateMessage | null = null;
+
   const session = new NetSession({
     onStatus: (text) => lobby.setStatus(text),
     onConnected: () => {
       lobby.destroy();
       clearScene();
-      const hud = new Hud(app, ['GEGNER (HOST)', 'DU']);
-      const view = new ClientView(rig.scene, INITIAL_RADIUS);
       const input = new KeyboardInputSource('wasd');
-
+      const touch = isTouchDevice() ? new TouchControls(app) : null;
       let sendAccumulator = 0;
       let last = performance.now();
+      let hud: Hud | RaceHud | null = null;
+      let derbyView: ClientView | null = null;
+      let raceView: RaceClientView | null = null;
+
       function loop(now: number) {
         frameHandle = requestAnimationFrame(loop);
         const dt = Math.min(0.05, (now - last) / 1000);
@@ -165,23 +224,38 @@ function startJoin(code: string) {
         sendAccumulator += dt;
         if (sendAccumulator >= 1 / 25) {
           sendAccumulator = 0;
-          session.send({ t: 'input', input: input.read() });
+          const localInput = touch ? combineInputs(input.read(), touch.read()) : input.read();
+          session.send({ t: 'input', input: localInput });
         }
 
-        if (latestState) {
-          view.applyState(latestState, dt);
-          hud.setPhase(latestState.phase, { winner: latestState.winner, countdown: latestState.countdown });
-          hud.setHp([latestState.cars[0].hp, latestState.cars[1].hp], MAX_HP);
-          hud.setScore(latestState.score);
-          updateArenaCamera(rig.camera, view.carPositions());
+        if (latestRaceState) {
+          if (!raceView) {
+            raceView = new RaceClientView(rig.scene);
+            hud = new RaceHud(app, ['GEGNER (HOST)', 'DU']);
+          }
+          raceView.applyState(latestRaceState.cars, dt);
+          (hud as RaceHud).setPhase(latestRaceState.phase, { winner: latestRaceState.winner, countdown: latestRaceState.countdown });
+          (hud as RaceHud).setProgress(latestRaceState.laps, latestRaceState.places);
+          updateArenaCamera(rig.camera, raceView.carPositions());
+        } else if (latestDerbyState) {
+          if (!derbyView) {
+            derbyView = new ClientView(rig.scene, INITIAL_RADIUS);
+            hud = new Hud(app, ['GEGNER (HOST)', 'DU']);
+          }
+          derbyView.applyState(latestDerbyState, dt);
+          (hud as Hud).setPhase(latestDerbyState.phase, { winner: latestDerbyState.winner, countdown: latestDerbyState.countdown });
+          (hud as Hud).setHp([latestDerbyState.cars[0].hp, latestDerbyState.cars[1].hp], MAX_HP);
+          (hud as Hud).setScore(latestDerbyState.score);
+          updateArenaCamera(rig.camera, derbyView.carPositions());
         }
         rig.renderer.render(rig.scene, rig.camera);
       }
       frameHandle = requestAnimationFrame(loop);
     },
     onData: (data) => {
-      const msg = data as StateMessage;
-      if (msg.t === 'state') latestState = msg;
+      const msg = data as { t: string };
+      if (msg.t === 'state') latestDerbyState = data as StateMessage;
+      else if (msg.t === 'race-state') latestRaceState = data as RaceStateMessage;
     },
     onDisconnected: () => lobby.setStatus('Verbindung getrennt.'),
   });

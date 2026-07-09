@@ -1,5 +1,6 @@
 import type { CarInput } from '../input/input';
 import type { MatchPhase } from '../game/matchState';
+import type { RacePhase } from '../game/raceState';
 import type { HazardType } from '../arena/arena';
 
 export interface InputMessage {
@@ -48,4 +49,14 @@ export interface StateMessage {
   cars: [CarSnapshot, CarSnapshot];
 }
 
-export type NetMessage = InputMessage | StateMessage;
+export interface RaceStateMessage {
+  t: 'race-state';
+  phase: RacePhase;
+  countdown: number;
+  winner?: number;
+  laps: [number, number];
+  places: [number, number];
+  cars: [CarSnapshot, CarSnapshot];
+}
+
+export type NetMessage = InputMessage | StateMessage | RaceStateMessage;
