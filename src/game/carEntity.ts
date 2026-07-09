@@ -4,6 +4,7 @@ import { createCarModel, type CarModel } from '../car/carModel';
 import { createCarBody, applyCarControl, DEFAULT_CAR_CONFIG } from '../physics/carPhysics';
 import { computeComebackBuff } from './comeback';
 import type { CarInput } from '../input/input';
+import type { ParticlePool } from '../effects/particles';
 
 export const MAX_HP = 100;
 
@@ -23,6 +24,7 @@ export class CarEntity {
   alive = true;
   effects: CarEffects = { shieldCharges: 0, ramUntil: 0, nitroUntil: 0, empUntil: 0 };
   private lastHitAt = 0;
+  private smokeTimer = 0;
   matchTime = 0;
 
   constructor(scene: THREE.Scene, world: CANNON.World, carMaterial: CANNON.Material, color: number, spawn: CANNON.Vec3, facing: number) {
@@ -64,6 +66,11 @@ export class CarEntity {
     return this.matchTime < this.effects.nitroUntil ? 1.6 : 1;
   }
 
+  /** Approximate real-world km/h for the HUD speedometer — the sim's units aren't literally meters/second. */
+  get speedKmh() {
+    return Math.hypot(this.body.velocity.x, this.body.velocity.z) * 11;
+  }
+
   /** Returns true if the hit was absorbed by a shield instead of dealing damage. */
   takeDamage(amount: number, now: number): boolean {
     if (now - this.lastHitAt < 0.35) return true; // brief i-frame to avoid multi-tick damage while pushing
@@ -88,7 +95,7 @@ export class CarEntity {
     this.syncMesh();
   }
 
-  update(dt: number, input: CarInput, terrainEffect: { friction: number; boostX: number; boostZ: number }) {
+  update(dt: number, input: CarInput, terrainEffect: { friction: number; boostX: number; boostZ: number }, particles?: ParticlePool) {
     this.matchTime += dt;
     const comeback = computeComebackBuff(this.hp, MAX_HP);
     const speedMult = comeback.speedMultiplier * this.nitroSpeedMultiplier * terrainEffect.friction;
@@ -101,6 +108,37 @@ export class CarEntity {
     }
 
     this.syncMesh();
+    if (particles) this.updateEffects(dt, input, particles);
+  }
+
+  private forwardVector(): THREE.Vector3 {
+    const f = new CANNON.Vec3(1, 0, 0);
+    this.body.quaternion.vmult(f, f);
+    return new THREE.Vector3(f.x, 0, f.z).normalize();
+  }
+
+  private updateEffects(dt: number, input: CarInput, particles: ParticlePool) {
+    this.smokeTimer -= dt;
+    const speed = Math.hypot(this.body.velocity.x, this.body.velocity.z);
+    const forward = this.forwardVector();
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    const rearCenter = new THREE.Vector3(this.body.position.x, 0.15, this.body.position.z).addScaledVector(forward, -this.model.dims.length * 0.42);
+
+    const drifting = Math.abs(input.steer) > 0.6 && speed > 4;
+    const braking = input.brake && speed > 3;
+    if ((drifting || braking) && this.smokeTimer <= 0) {
+      this.smokeTimer = 0.06;
+      for (const side of [-1, 1]) {
+        const pos = rearCenter.clone().addScaledVector(right, side * this.model.dims.width * 0.4);
+        const vel = new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.5 + Math.random() * 0.4, (Math.random() - 0.5) * 0.6);
+        particles.spawn(pos, vel, { life: 0.7, size: 0.32, color: 0xbfc2c8, opacity: 0.32, growth: 0.55 });
+      }
+    }
+
+    if (this.nitroSpeedMultiplier > 1) {
+      const vel = forward.clone().multiplyScalar(-3).add(new THREE.Vector3(0, 0.3, 0));
+      particles.spawn(rearCenter, vel, { life: 0.35, size: 0.28, color: 0x6fd0ff, opacity: 0.8, growth: 0.9, additive: true });
+    }
   }
 
   getSnapshot() {
@@ -113,6 +151,7 @@ export class CarEntity {
       qz: this.body.quaternion.z,
       qw: this.body.quaternion.w,
       hp: this.hp,
+      speed: this.speedKmh,
       shielded: this.effects.shieldCharges > 0,
       ramActive: this.ramMultiplier > 1,
       nitroActive: this.nitroSpeedMultiplier > 1,

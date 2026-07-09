@@ -5,6 +5,7 @@ import { Track } from '../arena/track';
 import { CarEntity } from './carEntity';
 import type { CarInput } from '../input/input';
 import { NEUTRAL_INPUT } from '../input/input';
+import { ParticlePool } from '../effects/particles';
 
 export type RacePhase = 'countdown' | 'racing' | 'finished';
 
@@ -27,6 +28,7 @@ export class RaceMatch {
   physics = createPhysicsWorld();
   track: Track;
   cars: [CarEntity, CarEntity];
+  particles: ParticlePool;
   phase: RacePhase = 'countdown';
   laps: [number, number] = [0, 0];
   private progress: [CarProgress, CarProgress];
@@ -38,6 +40,7 @@ export class RaceMatch {
     this.scene = scene;
     this.callbacks = callbacks;
     this.track = new Track(scene, this.physics.world, this.physics.groundMaterial, this.physics.groundMaterial);
+    this.particles = new ParticlePool(scene);
 
     const mid = this.track.midRadius();
     const laneOffset = 1.3;
@@ -90,6 +93,8 @@ export class RaceMatch {
   }
 
   update(dt: number, inputA: CarInput, inputB: CarInput) {
+    this.particles.update(dt);
+
     if (this.phase === 'countdown') {
       this.countdownRemaining -= dt;
       if (this.countdownRemaining <= 0) this.setPhase('racing');
@@ -98,7 +103,7 @@ export class RaceMatch {
     if (this.phase === 'finished') return;
 
     const inputs: [CarInput, CarInput] = [inputA ?? NEUTRAL_INPUT, inputB ?? NEUTRAL_INPUT];
-    this.cars.forEach((car, i) => car.update(dt, inputs[i], NO_TERRAIN_EFFECT));
+    this.cars.forEach((car, i) => car.update(dt, inputs[i], NO_TERRAIN_EFFECT, this.particles));
     this.physics.step(dt);
 
     this.cars.forEach((car, i) => {

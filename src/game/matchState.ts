@@ -6,6 +6,7 @@ import { CarEntity, type PowerupType } from './carEntity';
 import { PowerupManager } from './powerups';
 import type { CarInput } from '../input/input';
 import { NEUTRAL_INPUT } from '../input/input';
+import { ParticlePool } from '../effects/particles';
 
 export type MatchPhase = 'countdown' | 'fighting' | 'roundEnd' | 'matchEnd';
 
@@ -29,6 +30,7 @@ export class Match {
   arena: Arena;
   cars: [CarEntity, CarEntity];
   powerups: PowerupManager;
+  particles: ParticlePool;
   phase: MatchPhase = 'countdown';
   score: [number, number] = [0, 0];
   private countdownRemaining = COUNTDOWN_SECONDS;
@@ -42,6 +44,7 @@ export class Match {
     this.callbacks = callbacks;
     this.arena = new Arena(scene, this.physics.world, this.physics.groundMaterial);
     this.powerups = new PowerupManager(scene, () => this.arena.radius);
+    this.particles = new ParticlePool(scene);
 
     const carA = new CarEntity(scene, this.physics.world, this.physics.carMaterial, 0x9aa0a8, SPAWN_A, 0);
     const carB = new CarEntity(scene, this.physics.world, this.physics.carMaterial, 0xb03030, SPAWN_B, Math.PI);
@@ -62,13 +65,33 @@ export class Match {
         const damage = raw * other.ramMultiplier;
         if (damage <= 0) return;
         const absorbed = self.takeDamage(damage, self.matchTime);
+        const midX = (self.body.position.x + other.body.position.x) / 2;
+        const midZ = (self.body.position.z + other.body.position.z) / 2;
         if (!absorbed) {
-          this.callbacks.onCollisionSpark?.((self.body.position.x + other.body.position.x) / 2, (self.body.position.z + other.body.position.z) / 2);
+          this.callbacks.onCollisionSpark?.(midX, midZ);
         }
+        this.spawnCollisionSparks(midX, midZ, Math.min(1, impact / 20));
       });
     };
     bind(a, b);
     bind(b, a);
+  }
+
+  private spawnCollisionSparks(x: number, z: number, intensity: number) {
+    const count = Math.round(4 + intensity * 6);
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2 + Math.random() * 4 * intensity;
+      const vel = new THREE.Vector3(Math.cos(angle) * speed, 1.5 + Math.random() * 2, Math.sin(angle) * speed);
+      this.particles.spawn(new THREE.Vector3(x, 0.5, z), vel, {
+        life: 0.35 + Math.random() * 0.2,
+        size: 0.18,
+        color: Math.random() > 0.5 ? 0xffcc55 : 0xff7733,
+        opacity: 0.9,
+        growth: -0.3,
+        additive: true,
+      });
+    }
   }
 
   private setPhase(phase: MatchPhase, data?: { winner?: number; countdown?: number }) {
@@ -92,6 +115,8 @@ export class Match {
   }
 
   update(dt: number, inputA: CarInput, inputB: CarInput) {
+    this.particles.update(dt);
+
     if (this.phase === 'countdown') {
       this.countdownRemaining -= dt;
       this.callbacks.onPhaseChange?.('countdown', { countdown: Math.max(0, this.countdownRemaining) });
@@ -115,7 +140,7 @@ export class Match {
     this.cars.forEach((car, i) => {
       const pos = car.body.position;
       const effect = this.arena.effectAt(pos.x, pos.z);
-      car.update(dt, inputs[i], effect);
+      car.update(dt, inputs[i], effect, this.particles);
     });
 
     this.physics.step(dt);

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import { addTrees, addLightPoles } from '../effects/scenery';
 
 export const TRACK_OUTER_RADIUS = 26;
 export const TRACK_INNER_RADIUS = 15;
@@ -97,6 +98,10 @@ export class Track {
     // build each wall out of short straight segments arranged around the circle (a "polygon tube").
     buildRingWall(world, wallMaterial, this.outerRadius + 0.3);
     buildRingWall(world, wallMaterial, this.innerRadius - 0.3);
+
+    addLightPoles(scene, this.outerRadius + 3, 12);
+    addTrees(scene, this.outerRadius + 5, this.outerRadius + 22, 30);
+    addTrees(scene, 0, this.innerRadius - 3, 10);
   }
 
   /** Radial distance from the track's mid-line for spawn placement. */

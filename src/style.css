@@ -307,3 +307,37 @@ canvas {
   color: #a7abb6;
   font-weight: 700;
 }
+
+.speed-gauge {
+  position: absolute;
+  right: 7.2rem;
+  bottom: 1.6rem;
+  z-index: 12;
+  pointer-events: none;
+  text-align: center;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.speed-value {
+  font-size: 2.6rem;
+  font-weight: 900;
+  color: #f2f2f4;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-unit {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #a7abb6;
+  letter-spacing: 0.08em;
+}
+
+@media (max-width: 600px) {
+  .speed-gauge {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 6rem;
+  }
+}

@@ -1,4 +1,5 @@
 import type { RacePhase } from '../game/raceState';
+import { SpeedGauge } from './speedGauge';
 
 const TOTAL_LAPS = 3;
 
@@ -8,6 +9,7 @@ export class RaceHud {
   private placeEls: [HTMLDivElement, HTMLDivElement];
   private center: HTMLDivElement;
   private names: [string, string];
+  private speedGauge: SpeedGauge;
 
   constructor(container: HTMLElement, names: [string, string] = ['SPIELER 1', 'SPIELER 2']) {
     this.names = names;
@@ -38,6 +40,11 @@ export class RaceHud {
       this.root.querySelector('[data-place="right"]') as HTMLDivElement,
     ];
     this.center = this.root.querySelector('[data-center]') as HTMLDivElement;
+    this.speedGauge = new SpeedGauge(container);
+  }
+
+  setSpeed(kmh: number) {
+    this.speedGauge.setSpeed(kmh);
   }
 
   setProgress(laps: [number, number], places: [number, number]) {
@@ -66,5 +73,6 @@ export class RaceHud {
 
   destroy() {
     this.root.remove();
+    this.speedGauge.destroy();
   }
 }

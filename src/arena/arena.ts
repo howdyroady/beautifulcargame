@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import { addTrees, addLightPoles } from '../effects/scenery';
 
 export type HazardType = 'ice' | 'boost';
 
@@ -56,6 +57,9 @@ export class Arena {
     this.platformMesh.add(this.edgeRing);
 
     scene.add(this.platformMesh);
+
+    addLightPoles(scene, this.radius + 4, 8);
+    addTrees(scene, this.radius + 6, this.radius + 24, 26);
 
     this.spawnHazards();
   }

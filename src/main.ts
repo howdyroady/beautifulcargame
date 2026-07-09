@@ -24,7 +24,11 @@ function stopLoop() {
 }
 
 function clearScene() {
-  while (rig.scene.children.length) rig.scene.remove(rig.scene.children[0]);
+  // Lights and the sky dome are set up once in createSceneRig and must survive every mode switch —
+  // only sweep out game content (arena/track/cars/hazards) added on top of that baseline.
+  for (const child of [...rig.scene.children]) {
+    if (!child.userData.persistent) rig.scene.remove(child);
+  }
 }
 
 function showMenu() {
@@ -55,6 +59,7 @@ function startLocalMatch() {
     onPhaseChange: (phase, data) => hud.setPhase(phase, data),
     onHpChange: (hp) => hud.setHp(hp, MAX_HP),
     onScoreChange: (score) => hud.setScore(score),
+    onCollisionSpark: () => rig.shake(0.12),
   });
   const inputA = new KeyboardInputSource('wasd');
   const inputB = new KeyboardInputSource('arrows');
@@ -75,8 +80,10 @@ function startLocalMatch() {
       }
     }
 
+    hud.setSpeed(match.cars[0].speedKmh);
+    rig.setBoostFov(match.cars[0].nitroSpeedMultiplier > 1 || match.cars[1].nitroSpeedMultiplier > 1);
     updateArenaCamera(rig.camera, match.cars.map((c) => ({ x: c.body.position.x, z: c.body.position.z })));
-    rig.renderer.render(rig.scene, rig.camera);
+    rig.render();
   }
   frameHandle = requestAnimationFrame(loop);
 }
@@ -98,8 +105,9 @@ function startLocalRace() {
     last = now;
 
     race.update(dt, inputA.read(), inputB.read());
+    hud.setSpeed(race.cars[0].speedKmh);
     updateArenaCamera(rig.camera, race.cars.map((c) => ({ x: c.body.position.x, z: c.body.position.z })));
-    rig.renderer.render(rig.scene, rig.camera);
+    rig.render();
   }
   frameHandle = requestAnimationFrame(loop);
 }
@@ -145,8 +153,9 @@ function startHost(mode: GameMode) {
             sendAccumulator = 0;
             session.send(race.getSnapshot());
           }
+          hud.setSpeed(race.cars[0].speedKmh);
           updateArenaCamera(rig.camera, race.cars.map((c) => ({ x: c.body.position.x, z: c.body.position.z })));
-          rig.renderer.render(rig.scene, rig.camera);
+          rig.render();
         }
         frameHandle = requestAnimationFrame(loop);
         return;
@@ -157,6 +166,7 @@ function startHost(mode: GameMode) {
         onPhaseChange: (phase, data) => hud.setPhase(phase, data),
         onHpChange: (hp) => hud.setHp(hp, MAX_HP),
         onScoreChange: (score) => hud.setScore(score),
+        onCollisionSpark: () => rig.shake(0.12),
       });
       let matchEndedAt = 0;
       function loop(now: number) {
@@ -180,8 +190,10 @@ function startHost(mode: GameMode) {
           session.send(match.getSnapshot());
         }
 
+        hud.setSpeed(match.cars[0].speedKmh);
+        rig.setBoostFov(match.cars[0].nitroSpeedMultiplier > 1 || match.cars[1].nitroSpeedMultiplier > 1);
         updateArenaCamera(rig.camera, match.cars.map((c) => ({ x: c.body.position.x, z: c.body.position.z })));
-        rig.renderer.render(rig.scene, rig.camera);
+        rig.render();
       }
       frameHandle = requestAnimationFrame(loop);
     },
@@ -215,6 +227,7 @@ function startJoin(code: string) {
       let hud: Hud | RaceHud | null = null;
       let derbyView: ClientView | null = null;
       let raceView: RaceClientView | null = null;
+      let prevDerbyHp: [number, number] | null = null;
 
       function loop(now: number) {
         frameHandle = requestAnimationFrame(loop);
@@ -236,6 +249,7 @@ function startJoin(code: string) {
           raceView.applyState(latestRaceState.cars, dt);
           (hud as RaceHud).setPhase(latestRaceState.phase, { winner: latestRaceState.winner, countdown: latestRaceState.countdown });
           (hud as RaceHud).setProgress(latestRaceState.laps, latestRaceState.places);
+          (hud as RaceHud).setSpeed(latestRaceState.cars[1].speed);
           updateArenaCamera(rig.camera, raceView.carPositions());
         } else if (latestDerbyState) {
           if (!derbyView) {
@@ -244,11 +258,16 @@ function startJoin(code: string) {
           }
           derbyView.applyState(latestDerbyState, dt);
           (hud as Hud).setPhase(latestDerbyState.phase, { winner: latestDerbyState.winner, countdown: latestDerbyState.countdown });
-          (hud as Hud).setHp([latestDerbyState.cars[0].hp, latestDerbyState.cars[1].hp], MAX_HP);
+          const hp: [number, number] = [latestDerbyState.cars[0].hp, latestDerbyState.cars[1].hp];
+          (hud as Hud).setHp(hp, MAX_HP);
           (hud as Hud).setScore(latestDerbyState.score);
+          (hud as Hud).setSpeed(latestDerbyState.cars[1].speed);
+          rig.setBoostFov(latestDerbyState.cars[0].nitroActive || latestDerbyState.cars[1].nitroActive);
+          if (prevDerbyHp && (hp[0] < prevDerbyHp[0] || hp[1] < prevDerbyHp[1])) rig.shake(0.12);
+          prevDerbyHp = hp;
           updateArenaCamera(rig.camera, derbyView.carPositions());
         }
-        rig.renderer.render(rig.scene, rig.camera);
+        rig.render();
       }
       frameHandle = requestAnimationFrame(loop);
     },

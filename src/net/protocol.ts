@@ -17,6 +17,7 @@ export interface CarSnapshot {
   qz: number;
   qw: number;
   hp: number;
+  speed: number;
   shielded: boolean;
   ramActive: boolean;
   nitroActive: boolean;

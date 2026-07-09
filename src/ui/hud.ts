@@ -1,4 +1,5 @@
 import type { MatchPhase } from '../game/matchState';
+import { SpeedGauge } from './speedGauge';
 
 export class Hud {
   root: HTMLDivElement;
@@ -6,6 +7,7 @@ export class Hud {
   private scoreEls: [HTMLDivElement, HTMLDivElement];
   private center: HTMLDivElement;
   private names: [string, string];
+  private speedGauge: SpeedGauge;
 
   constructor(container: HTMLElement, names: [string, string] = ['SPIELER 1', 'SPIELER 2']) {
     this.names = names;
@@ -36,6 +38,11 @@ export class Hud {
       this.root.querySelector('[data-score="right"]') as HTMLDivElement,
     ];
     this.center = this.root.querySelector('[data-center]') as HTMLDivElement;
+    this.speedGauge = new SpeedGauge(container);
+  }
+
+  setSpeed(kmh: number) {
+    this.speedGauge.setSpeed(kmh);
   }
 
   setHp(hp: [number, number], maxHp: number) {
@@ -71,5 +78,6 @@ export class Hud {
 
   destroy() {
     this.root.remove();
+    this.speedGauge.destroy();
   }
 }

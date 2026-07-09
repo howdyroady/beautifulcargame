@@ -1,22 +1,62 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 export interface SceneRig {
   scene: THREE.Scene;
   renderer: THREE.WebGLRenderer;
   camera: THREE.PerspectiveCamera;
   resize: () => void;
+  render: () => void;
+  /** One-shot camera shake, e.g. on a heavy collision. Magnitude in world units. */
+  shake: (magnitude: number) => void;
+  /** Smoothly biases the camera's FOV wider (speed sensation) toward the given target each frame. */
+  setBoostFov: (active: boolean) => void;
+}
+
+/** Simple unlit gradient sky dome — kept fully independent of scene.background/environment so a
+ *  texture problem here can never blank out the lit scene (bit us once already). */
+function buildSkyDome(): THREE.Mesh {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, '#04050c');
+  grad.addColorStop(0.35, '#0d1330');
+  grad.addColorStop(0.62, '#3a2550');
+  grad.addColorStop(0.78, '#c85a3c');
+  grad.addColorStop(0.86, '#1a1220');
+  grad.addColorStop(1, '#020204');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const geo = new THREE.SphereGeometry(180, 24, 16);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false });
+  const dome = new THREE.Mesh(geo, mat);
+  dome.renderOrder = -1;
+  return dome;
 }
 
 export function createSceneRig(container: HTMLElement): SceneRig {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x05060a);
-  scene.fog = new THREE.Fog(0x05060a, 30, 70);
+  scene.background = new THREE.Color(0x04050c);
+  scene.fog = new THREE.Fog(0x0d1330, 34, 90);
+  const skyDome = buildSkyDome();
+  skyDome.userData.persistent = true;
+  scene.add(skyDome);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
   container.appendChild(renderer.domElement);
 
   // Baseline scene lighting fill: PBR materials at any real metalness/roughness read far too dark
@@ -26,10 +66,12 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   pmrem.dispose();
 
-  const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 200);
+  const baseFov = 58;
+  const camera = new THREE.PerspectiveCamera(baseFov, 1, 0.1, 200);
   camera.position.set(0, 16, 20);
 
   const hemi = new THREE.HemisphereLight(0x8899bb, 0x11141a, 0.9);
+  hemi.userData.persistent = true;
   scene.add(hemi);
 
   const sun = new THREE.DirectionalLight(0xfff2e0, 1.4);
@@ -41,22 +83,68 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   sun.shadow.camera.top = 30;
   sun.shadow.camera.bottom = -30;
   sun.shadow.camera.far = 60;
+  sun.userData.persistent = true;
   scene.add(sun);
 
   const rimLight = new THREE.PointLight(0xff5030, 0.6, 60);
   rimLight.position.set(-15, 10, -15);
+  rimLight.userData.persistent = true;
   scene.add(rimLight);
+
+  const composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.4, 0.82);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+
+  let shakeMagnitude = 0;
+  let shakeDecayTimer = 0;
+  let boostFovActive = false;
+  let currentFov = baseFov;
 
   const resize = () => {
     const { clientWidth, clientHeight } = container;
     camera.aspect = clientWidth / clientHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(clientWidth, clientHeight);
+    composer.setSize(clientWidth, clientHeight);
+    bloom.setSize(clientWidth, clientHeight);
   };
   window.addEventListener('resize', resize);
   resize();
 
-  return { scene, renderer, camera, resize };
+  const render = () => {
+    const targetFov = boostFovActive ? baseFov + 6 : baseFov;
+    currentFov += (targetFov - currentFov) * 0.08;
+    if (Math.abs(currentFov - camera.fov) > 0.01) {
+      camera.fov = currentFov;
+      camera.updateProjectionMatrix();
+    }
+
+    if (shakeDecayTimer > 0) {
+      shakeDecayTimer -= 1 / 60;
+      const s = shakeMagnitude * Math.max(0, shakeDecayTimer);
+      camera.position.x += (Math.random() - 0.5) * s;
+      camera.position.y += (Math.random() - 0.5) * s;
+    }
+
+    composer.render();
+  };
+
+  return {
+    scene,
+    renderer,
+    camera,
+    resize,
+    render,
+    shake: (magnitude: number) => {
+      shakeMagnitude = magnitude;
+      shakeDecayTimer = 0.35;
+    },
+    setBoostFov: (active: boolean) => {
+      boostFovActive = active;
+    },
+  };
 }
 
 /** Chase-style overhead camera that frames both cars, arcade-derby style. */
