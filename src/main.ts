@@ -13,6 +13,7 @@ import { RaceClientView } from './net/raceClientView';
 import { INITIAL_RADIUS } from './arena/arena';
 import type { StateMessage, RaceStateMessage } from './net/protocol';
 import { TouchControls, isTouchDevice, combineInputs } from './ui/touchControls';
+import { deriveDerbyBotInput, deriveRaceBotInput } from './ai/botController';
 
 const app = document.getElementById('app')!;
 const rig = createSceneRig(app);
@@ -36,10 +37,10 @@ function showMenu() {
   clearScene();
   rig.camera.position.set(0, 16, 20);
   const menu = new MainMenu(app, {
-    onLocal: (mode) => {
+    onLocal: (mode, vsBot) => {
       menu.destroy();
-      if (mode === 'race') startLocalRace();
-      else startLocalMatch();
+      if (mode === 'race') startLocalRace(vsBot);
+      else startLocalMatch(vsBot);
     },
     onHost: (mode) => {
       menu.destroy();
@@ -52,9 +53,9 @@ function showMenu() {
   });
 }
 
-function startLocalMatch() {
+function startLocalMatch(vsBot: boolean) {
   clearScene();
-  const hud = new Hud(app, ['SPIELER 1', 'SPIELER 2']);
+  const hud = new Hud(app, ['SPIELER 1', vsBot ? 'BOT' : 'SPIELER 2']);
   const match = new Match(rig.scene, {
     onPhaseChange: (phase, data) => hud.setPhase(phase, data),
     onHpChange: (hp) => hud.setHp(hp, MAX_HP),
@@ -62,7 +63,10 @@ function startLocalMatch() {
     onCollisionSpark: () => rig.shake(0.12),
   });
   const inputA = new KeyboardInputSource('wasd');
-  const inputB = new KeyboardInputSource('arrows');
+  const inputB = vsBot ? null : new KeyboardInputSource('arrows');
+  // Mobile has no physical keyboard — player 1 always gets an on-screen joystick so local play
+  // (vs. bot in particular) is actually controllable on a phone.
+  const touch = isTouchDevice() ? new TouchControls(app) : null;
 
   let matchEndedAt = 0;
   let last = performance.now();
@@ -71,7 +75,9 @@ function startLocalMatch() {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
-    match.update(dt, inputA.read(), inputB.read());
+    const localInputA = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
+    const inputBValue = vsBot ? deriveDerbyBotInput(match.cars[1], match.cars[0], match.arena.radius) : inputB!.read();
+    match.update(dt, localInputA, inputBValue);
     if (match.phase === 'matchEnd') {
       if (!matchEndedAt) matchEndedAt = now;
       if (now - matchEndedAt > 4000) {
@@ -88,15 +94,17 @@ function startLocalMatch() {
   frameHandle = requestAnimationFrame(loop);
 }
 
-function startLocalRace() {
+function startLocalRace(vsBot: boolean) {
   clearScene();
-  const hud = new RaceHud(app, ['SPIELER 1', 'SPIELER 2']);
+  const hud = new RaceHud(app, ['SPIELER 1', vsBot ? 'BOT' : 'SPIELER 2']);
   const race = new RaceMatch(rig.scene, {
     onPhaseChange: (phase, data) => hud.setPhase(phase, data),
     onProgress: (laps, places) => hud.setProgress(laps, places),
   });
   const inputA = new KeyboardInputSource('wasd');
-  const inputB = new KeyboardInputSource('arrows');
+  const inputB = vsBot ? null : new KeyboardInputSource('arrows');
+  const touch = isTouchDevice() ? new TouchControls(app) : null;
+  const trackMidRadius = race.track.midRadius();
 
   let last = performance.now();
   function loop(now: number) {
@@ -104,7 +112,9 @@ function startLocalRace() {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
-    race.update(dt, inputA.read(), inputB.read());
+    const localInputA = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
+    const inputBValue = vsBot ? deriveRaceBotInput(race.cars[1], trackMidRadius) : inputB!.read();
+    race.update(dt, localInputA, inputBValue);
     hud.setSpeed(race.cars[0].speedKmh);
     updateArenaCamera(rig.camera, race.cars.map((c) => ({ x: c.body.position.x, z: c.body.position.z })));
     rig.render();

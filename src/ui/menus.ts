@@ -1,7 +1,7 @@
 export type GameMode = 'derby' | 'race';
 
 export interface MainMenuCallbacks {
-  onLocal: (mode: GameMode) => void;
+  onLocal: (mode: GameMode, vsBot: boolean) => void;
   onHost: (mode: GameMode) => void;
   onJoin: (code: string, mode: GameMode) => void;
 }
@@ -9,6 +9,7 @@ export interface MainMenuCallbacks {
 export class MainMenu {
   root: HTMLDivElement;
   private mode: GameMode = 'derby';
+  private vsBot = false;
 
   constructor(container: HTMLElement, callbacks: MainMenuCallbacks) {
     this.root = document.createElement('div');
@@ -20,8 +21,12 @@ export class MainMenu {
         <button class="mode-btn active" data-mode="derby">DERBY</button>
         <button class="mode-btn" data-mode="race">RENNEN</button>
       </div>
+      <div class="mode-toggle">
+        <button class="mode-btn active" data-opponent="player">2 SPIELER</button>
+        <button class="mode-btn" data-opponent="bot">GEGEN BOT</button>
+      </div>
       <div class="menu-buttons">
-        <button class="menu-btn" data-action="local">Lokal · WASD vs Pfeiltasten</button>
+        <button class="menu-btn" data-action="local">Lokal · WASD (+ Touch)</button>
         <button class="menu-btn" data-action="host">Online: Spiel erstellen</button>
         <div class="menu-join-row">
           <input class="menu-input" data-join-code placeholder="CODE" maxlength="6" />
@@ -39,7 +44,15 @@ export class MainMenu {
       });
     });
 
-    this.root.querySelector('[data-action="local"]')!.addEventListener('click', () => callbacks.onLocal(this.mode));
+    const opponentBtns = Array.from(this.root.querySelectorAll<HTMLButtonElement>('[data-opponent]'));
+    opponentBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        this.vsBot = btn.dataset.opponent === 'bot';
+        opponentBtns.forEach((b) => b.classList.toggle('active', b === btn));
+      });
+    });
+
+    this.root.querySelector('[data-action="local"]')!.addEventListener('click', () => callbacks.onLocal(this.mode, this.vsBot));
     this.root.querySelector('[data-action="host"]')!.addEventListener('click', () => callbacks.onHost(this.mode));
     this.root.querySelector('[data-action="join"]')!.addEventListener('click', () => {
       const input = this.root.querySelector('[data-join-code]') as HTMLInputElement;
