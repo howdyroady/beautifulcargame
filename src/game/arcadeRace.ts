@@ -43,6 +43,8 @@ export interface ArcadeRaceOptions {
   humanCount: 1 | 2;
   aiCount: number;
   playerColor: number;
+  /** Preloaded glTF model for the player's car (procedural build when omitted). */
+  playerModel?: import('../car/carModel').CarModel;
 }
 
 const AI_COLORS = [0xb03030, 0x2054c0, 0xd0a020, 0x30a060];
@@ -100,7 +102,15 @@ export class ArcadeRace {
       const heading = Math.atan2(-tan.z, tan.x);
       const isHuman = i < opts.humanCount;
       const color = isHuman ? (i === 0 ? opts.playerColor : 0xf0f0f0) : AI_COLORS[(i - opts.humanCount) % AI_COLORS.length];
-      const car = new CarEntity(scene, this.physics.world, this.physics.carMaterial, color, new CANNON.Vec3(gridPos.x, 1.0, gridPos.z), heading);
+      const car = new CarEntity(
+        scene,
+        this.physics.world,
+        this.physics.carMaterial,
+        color,
+        new CANNON.Vec3(gridPos.x, 1.0, gridPos.z),
+        heading,
+        i === 0 ? opts.playerModel : undefined,
+      );
       this.cars.push(car);
       this.racers.push({ nitroCharge: 0.3, nitroActive: false, lap: 0, nextCp: 1, finished: false, finishTime: 0, airborne: false, lastJumpAt: -10 });
       this.names.push(isHuman ? (i === 0 ? 'DU' : 'SPIELER 2') : `BOT ${i - opts.humanCount + 1}`);

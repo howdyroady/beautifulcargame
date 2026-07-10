@@ -9,7 +9,10 @@ import { KeyboardInputSource, NEUTRAL_INPUT, type CarInput } from './input/input
 import { Hud } from './ui/hud';
 import { ArcadeHud } from './ui/arcadeHud';
 import { ParkingHud } from './ui/parkingHud';
-import { MainMenu, LobbyScreen, CAR_CHOICES, type MenuSelection } from './ui/menus';
+import { MainMenu, LobbyScreen, CAR_CHOICES, type MenuSelection, type CarChoice } from './ui/menus';
+import { createCarModel, type CarModel } from './car/carModel';
+import { loadGltfCar } from './car/gltfCar';
+import { Minimap } from './ui/minimap';
 import { NetSession } from './net/peer';
 import { ClientView } from './net/clientView';
 import { ArcadeClientView } from './net/arcadeClientView';
@@ -73,12 +76,61 @@ function headingOf(car: CarEntity): { x: number; z: number } {
 function showMenu() {
   stopLoop();
   clearScene();
-  rig.camera.position.set(0, 16, 20);
   rig.setBoostFov(false);
+
+  // 3D showroom behind the (translucent) menu: the currently selected car rotating on a plinth.
+  const stage = new THREE.Group();
+  const plinth = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.4, 3.8, 0.25, 40),
+    new THREE.MeshStandardMaterial({ color: 0x1c1f27, roughness: 0.4, metalness: 0.5 }),
+  );
+  plinth.position.y = -0.12;
+  plinth.receiveShadow = true;
+  stage.add(plinth);
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(3.6, 0.05, 8, 48),
+    new THREE.MeshStandardMaterial({ color: 0xff4a3c, emissive: 0xff2a1c, emissiveIntensity: 1.2 }),
+  );
+  rim.rotation.x = Math.PI / 2;
+  stage.add(rim);
+  rig.scene.add(stage);
+
+  let showCar: THREE.Group | null = null;
+  let carRequest = 0;
+  const setShowroomCar = (choice: CarChoice) => {
+    const req = ++carRequest;
+    const apply = (model: CarModel) => {
+      if (req !== carRequest) return; // a newer selection already replaced this one
+      if (showCar) stage.remove(showCar);
+      showCar = model.group;
+      stage.add(showCar);
+    };
+    if (choice.modelUrl) {
+      loadGltfCar(choice.modelUrl).then(apply).catch(() => apply(createCarModel(choice.color)));
+    } else {
+      apply(createCarModel(choice.color));
+    }
+  };
+  setShowroomCar(CAR_CHOICES[0]);
+
+  rig.camera.position.set(4.6, 2.4, 5.6);
+  rig.camera.lookAt(0, 0.7, 0);
+
+  let last = performance.now();
+  function menuLoop(now: number) {
+    frameHandle = requestAnimationFrame(menuLoop);
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    stage.rotation.y += dt * 0.45;
+    rig.camera.lookAt(0, 0.7, 0);
+    rig.render();
+  }
+  frameHandle = requestAnimationFrame(menuLoop);
+
   const menu = new MainMenu(app, {
     onLocal: (sel) => {
       menu.destroy();
-      if (sel.mode === 'race') startArcadeRace(sel);
+      if (sel.mode === 'race') void startArcadeRace(sel);
       else if (sel.mode === 'parking') startParking(sel);
       else startLocalDerby(sel);
     },
@@ -91,32 +143,49 @@ function showMenu() {
       startJoin(code, sel);
     },
   });
+  menu.onCarChange = setShowroomCar;
 }
 
 // ---------------------------------------------------------------------------
 // RENNEN (local): player + AI field, or 2 humans + AI on one keyboard.
 // ---------------------------------------------------------------------------
-function startArcadeRace(sel: MenuSelection) {
+async function startArcadeRace(sel: MenuSelection) {
+  stopLoop(); // the menu showroom loop is still ticking
   clearScene();
   const humanCount = sel.vsBot ? 1 : 2;
-  const aiCount = sel.vsBot ? 3 : 2;
+  // Desktops handle a fuller grid; phones stay at 4 cars for fps headroom.
+  const aiCount = sel.vsBot ? (isTouchDevice() ? 3 : 5) : 2;
 
+  // Preload the glTF player car (cached after the menu showroom already displayed it).
+  let playerModel: CarModel | undefined;
+  if (sel.carModelUrl) {
+    try {
+      playerModel = await loadGltfCar(sel.carModelUrl);
+    } catch {
+      playerModel = undefined;
+    }
+  }
+
+  const cleanup = () => {
+    hud.destroy();
+    minimap.destroy();
+    touch?.destroy();
+    engineSound.setScreech(false);
+  };
   const hud = new ArcadeHud(app, {
     onRestart: () => {
-      hud.destroy();
-      touch?.destroy();
-      startArcadeRace(sel);
+      cleanup();
+      void startArcadeRace(sel);
     },
     onMenu: () => {
-      hud.destroy();
-      touch?.destroy();
+      cleanup();
       showMenu();
     },
   });
 
   const race = new ArcadeRace(
     rig.scene,
-    { trackId: sel.trackId, humanCount: humanCount as 1 | 2, aiCount, playerColor: sel.carColor },
+    { trackId: sel.trackId, humanCount: humanCount as 1 | 2, aiCount, playerColor: sel.carColor, playerModel },
     {
       onPhaseChange: (phase, data) => {
         if (phase === 'countdown') hud.setCountdown(data?.countdown ?? 0);
@@ -126,6 +195,7 @@ function startArcadeRace(sel: MenuSelection) {
       onShake: (m) => rig.shake(m),
     },
   );
+  const minimap = new Minimap(app, race.circuit);
 
   const inputA = new KeyboardInputSource('wasd');
   const inputB = humanCount === 2 ? new KeyboardInputSource('arrows') : null;
@@ -137,12 +207,24 @@ function startArcadeRace(sel: MenuSelection) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
-    const localA = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
+    let localA = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
+    // Asphalt-style auto-throttle on touch: the car always drives, the stick steers.
+    // Pulling the stick down still reverses, the button still brakes.
+    if (touch && localA.throttle === 0 && !localA.brake) localA = { ...localA, throttle: 1 };
     const inputs = inputB ? [localA, inputB.read()] : [localA];
     race.update(dt, inputs);
 
+    const playerSpeed = Math.hypot(race.cars[0].body.velocity.x, race.cars[0].body.velocity.z);
     engineSound.update(dt, race.cars[0].speedKmh, Math.abs(localA.throttle), race.racers[0].nitroActive);
+    engineSound.setScreech(Math.abs(localA.steer) > 0.6 && playerSpeed > 8);
     rig.setBoostFov(race.racers[0].nitroActive);
+    minimap.update(
+      race.cars.map((c, i) => ({
+        x: c.body.position.x,
+        z: c.body.position.z,
+        color: i === 0 ? '#40e0a0' : i < race.humanCount ? '#ffffff' : '#ff5050',
+      })),
+    );
 
     if (humanCount === 1) {
       const h = headingOf(race.cars[0]);
@@ -166,6 +248,7 @@ function startArcadeRace(sel: MenuSelection) {
 // PARKEN
 // ---------------------------------------------------------------------------
 function startParking(sel: MenuSelection) {
+  stopLoop(); // the menu showroom loop is still ticking
   clearScene();
   const hud = new ParkingHud(app, {
     onRetry: () => {
@@ -213,6 +296,7 @@ function startParking(sel: MenuSelection) {
 // DERBY (local)
 // ---------------------------------------------------------------------------
 function startLocalDerby(sel: MenuSelection) {
+  stopLoop(); // the menu showroom loop is still ticking
   clearScene();
   const hud = new Hud(app, ['SPIELER 1', sel.vsBot ? 'BOT' : 'SPIELER 2']);
   const match = new Match(
@@ -263,6 +347,7 @@ function startLocalDerby(sel: MenuSelection) {
 // ONLINE host: race → ArcadeRace 2 humans, derby → Match.
 // ---------------------------------------------------------------------------
 function startHost(sel: MenuSelection) {
+  stopLoop(); // the menu showroom loop is still ticking
   clearScene();
   const lobby = new LobbyScreen(app, () => {
     lobby.destroy();
@@ -309,14 +394,18 @@ function startHost(sel: MenuSelection) {
             onShake: (m) => rig.shake(m),
           },
         );
+        const minimap = new Minimap(app, race.circuit);
         function loop(now: number) {
           frameHandle = requestAnimationFrame(loop);
           const dt = Math.min(0.05, (now - last) / 1000);
           last = now;
-          const localA = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
+          let localA = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
+          if (touch && localA.throttle === 0 && !localA.brake) localA = { ...localA, throttle: 1 };
           race.update(dt, [localA, remoteInput]);
           engineSound.update(dt, race.cars[0].speedKmh, Math.abs(localA.throttle), race.racers[0].nitroActive);
+          engineSound.setScreech(Math.abs(localA.steer) > 0.6 && race.cars[0].speedKmh > 30);
           rig.setBoostFov(race.racers[0].nitroActive);
+          minimap.update(race.cars.map((c, i) => ({ x: c.body.position.x, z: c.body.position.z, color: i === 0 ? '#40e0a0' : '#ffffff' })));
           sendAccumulator += dt;
           if (sendAccumulator >= 1 / 25) {
             sendAccumulator = 0;
@@ -383,6 +472,7 @@ function startHost(sel: MenuSelection) {
 // ONLINE join: mode is detected from the shape of the host's first snapshot.
 // ---------------------------------------------------------------------------
 function startJoin(code: string, sel: MenuSelection) {
+  stopLoop(); // the menu showroom loop is still ticking
   clearScene();
   const lobby = new LobbyScreen(app, () => {
     lobby.destroy();
@@ -403,6 +493,7 @@ function startJoin(code: string, sel: MenuSelection) {
       let last = performance.now();
       let derbyHud: Hud | null = null;
       let raceHud: ArcadeHud | null = null;
+      let clientMinimap: Minimap | null = null;
       let derbyView: ClientView | null = null;
       let raceView: ArcadeClientView | null = null;
       let prevDerbyHp: [number, number] | null = null;
@@ -424,6 +515,7 @@ function startJoin(code: string, sel: MenuSelection) {
           const s = latestRaceState;
           if (!raceView) {
             raceView = new ArcadeClientView(rig.scene, s.trackId, 0xf0f0f0, sel.carColor);
+            clientMinimap = new Minimap(app, raceView.circuit);
             raceHud = new ArcadeHud(app, {
               onRestart: () => {},
               onMenu: () => {
@@ -454,6 +546,10 @@ function startJoin(code: string, sel: MenuSelection) {
           }
           engineSound.update(dt, s.cars[1].speed, 0.6, s.cars[1].nitroActive);
           rig.setBoostFov(s.cars[1].nitroActive);
+          clientMinimap?.update([
+            { x: s.cars[0].x, z: s.cars[0].z, color: '#ffffff' },
+            { x: s.cars[1].x, z: s.cars[1].z, color: '#40e0a0' },
+          ]);
           const h = raceView.headingOf(1);
           const p = raceView.positionOf(1);
           updateChaseCamera(rig.camera, { x: p.x, z: p.z, headingX: h.x, headingZ: h.z, speed: s.cars[1].speed / 3.6 });

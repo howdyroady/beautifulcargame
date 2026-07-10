@@ -27,8 +27,16 @@ export class CarEntity {
   private smokeTimer = 0;
   matchTime = 0;
 
-  constructor(scene: THREE.Scene, world: CANNON.World, carMaterial: CANNON.Material, color: number, spawn: CANNON.Vec3, facing: number) {
-    this.model = createCarModel(color);
+  constructor(
+    scene: THREE.Scene,
+    world: CANNON.World,
+    carMaterial: CANNON.Material,
+    color: number,
+    spawn: CANNON.Vec3,
+    facing: number,
+    prebuiltModel?: CarModel,
+  ) {
+    this.model = prebuiltModel ?? createCarModel(color);
     scene.add(this.model.group);
     this.body = createCarBody(this.model.dims, carMaterial, spawn);
     this.body.quaternion.setFromEuler(0, facing, 0);

@@ -18,6 +18,7 @@ export class EngineSound {
   private engineGain!: GainNode;
   private filter!: BiquadFilterNode;
   private noiseGain!: GainNode;
+  private screechGain: GainNode | null = null;
   private rpm = 0;
   private enabled = true;
 
@@ -115,6 +116,32 @@ export class EngineSound {
     this.filter.frequency.setTargetAtTime(240 + throttle * 900 + this.rpm * 500, now, 0.05);
     this.engineGain.gain.setTargetAtTime(0.32 + throttle * 0.3 + this.rpm * 0.12, now, 0.05);
     this.noiseGain.gain.setTargetAtTime(0.08 + this.rpm * 0.22, now, 0.05);
+  }
+
+  /** Continuous tire screech, faded in/out — call every frame with whether the car is sliding. */
+  setScreech(active: boolean) {
+    if (!this.ctx || !this.enabled) return;
+    if (!this.screechGain) {
+      const ctx = this.ctx;
+      const len = ctx.sampleRate;
+      const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 1900;
+      bp.Q.value = 5;
+      this.screechGain = ctx.createGain();
+      this.screechGain.gain.value = 0;
+      src.connect(bp);
+      bp.connect(this.screechGain);
+      this.screechGain.connect(this.master);
+      src.start();
+    }
+    this.screechGain.gain.setTargetAtTime(active ? 0.5 : 0, this.ctx.currentTime, 0.08);
   }
 
   /** Short rising hiss when nitro kicks in. */

@@ -6,18 +6,22 @@ export interface CarChoice {
   id: string;
   label: string;
   color: number;
+  /** Optional real glTF model (CC0) loaded instead of the procedural coupe. */
+  modelUrl?: string;
 }
 
 export const CAR_CHOICES: CarChoice[] = [
-  { id: 'silver', label: 'C-COUPE SILBER', color: 0x9199a1 },
-  { id: 'c63', label: 'C63 AMG SCHWARZ', color: 0x1a1c20 },
+  { id: 'silver', label: 'COUPE SILBER', color: 0x9199a1 },
+  { id: 'c63', label: 'AMG SCHWARZ', color: 0x1a1c20 },
   { id: 'red', label: 'ROT', color: 0xa02828 },
+  { id: 'gt', label: 'GT (3D-MODELL)', color: 0xf0f0f0, modelUrl: 'models/toycar.glb' },
 ];
 
 export interface MenuSelection {
   mode: GameMode;
   vsBot: boolean;
   carColor: number;
+  carModelUrl?: string;
   trackId: string;
   scenario: ParkingScenario;
 }
@@ -30,6 +34,8 @@ export interface MainMenuCallbacks {
 
 export class MainMenu {
   root: HTMLDivElement;
+  /** Fires when the player taps a different car chip — drives the 3D showroom preview. */
+  onCarChange?: (choice: CarChoice) => void;
   private sel: MenuSelection = { mode: 'race', vsBot: true, carColor: CAR_CHOICES[0].color, trackId: 'city', scenario: 'vorwaerts' };
 
   constructor(container: HTMLElement, callbacks: MainMenuCallbacks) {
@@ -47,6 +53,7 @@ export class MainMenu {
       </div>
       <div class="mode-toggle" data-group="track" data-race-only>
         <button class="mode-btn active" data-val="city">CITY GP</button>
+        <button class="mode-btn" data-val="serpent">SERPENT</button>
         <button class="mode-btn" data-val="ring">RING</button>
       </div>
       <div class="mode-toggle" data-group="opponent" data-race-derby-only>
@@ -85,7 +92,10 @@ export class MainMenu {
       this.updateVisibility();
     });
     bindGroup('car', (v) => {
-      this.sel.carColor = CAR_CHOICES.find((c) => c.id === v)!.color;
+      const choice = CAR_CHOICES.find((c) => c.id === v)!;
+      this.sel.carColor = choice.color;
+      this.sel.carModelUrl = choice.modelUrl;
+      this.onCarChange?.(choice);
     });
     bindGroup('track', (v) => (this.sel.trackId = v));
     bindGroup('opponent', (v) => (this.sel.vsBot = v === 'bot'));

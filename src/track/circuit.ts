@@ -38,6 +38,22 @@ export const TRACKS: Record<string, TrackConfig> = {
     buildings: true,
     groundColor: 0x15171d,
   },
+  serpent: {
+    id: 'serpent',
+    name: 'SERPENT',
+    // Peanut-shaped mountain course: two bulbs linked by a fast S-waist — constant direction changes.
+    points: [
+      [50, 0], [46, 22], [30, 36], [10, 30], [-4, 14], [-20, 10], [-36, 20], [-50, 12],
+      [-52, -8], [-40, -24], [-22, -22], [-8, -12], [4, -22], [22, -38], [42, -30],
+    ],
+    width: 9,
+    laps: 3,
+    jumpPadsAt: [0.34, 0.86],
+    boostPadsAt: [0.1, 0.58],
+    nitroPickupsAt: [0.22, 0.48, 0.72, 0.95],
+    buildings: false,
+    groundColor: 0x1b2a20,
+  },
   ring: {
     id: 'ring',
     name: 'RING',
