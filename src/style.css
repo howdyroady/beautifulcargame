@@ -7,6 +7,7 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
   background: #05060a;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -16,7 +17,11 @@ html, body {
 #app {
   position: relative;
   width: 100vw;
+  /* 100vh on mobile browsers is the *largest* possible viewport (address bar hidden), so
+     fixed-position UI (the touch joystick in particular) can end up placed behind/under the
+     browser's own address bar chrome. 100dvh tracks the actual visible viewport instead. */
   height: 100vh;
+  height: 100dvh;
 }
 
 canvas {

@@ -111,6 +111,9 @@ export function createSceneRig(container: HTMLElement): SceneRig {
     bloom.setSize(clientWidth, clientHeight);
   };
   window.addEventListener('resize', resize);
+  // Mobile browsers resize the *visual* viewport (address bar show/hide) without always firing a
+  // plain window 'resize' — listen to that too so the canvas/HUD track the real visible area.
+  window.visualViewport?.addEventListener('resize', resize);
   resize();
 
   const render = () => {
