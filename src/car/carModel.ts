@@ -291,6 +291,26 @@ export function createCarModel(paintColor = 0x9199a1): CarModel {
   skirt.position.set(0, wheelRadius * 0.28, 0);
   group.add(skirt);
 
+  // Soft contact shadow: real-time shadows alone leave low-poly cars looking like they hover;
+  // a dark radial blob under the chassis grounds them at almost zero cost.
+  const shadowCanvas = document.createElement('canvas');
+  shadowCanvas.width = 64;
+  shadowCanvas.height = 64;
+  const sctx = shadowCanvas.getContext('2d')!;
+  const sgrad = sctx.createRadialGradient(32, 32, 4, 32, 32, 32);
+  sgrad.addColorStop(0, 'rgba(0,0,0,0.42)');
+  sgrad.addColorStop(1, 'rgba(0,0,0,0)');
+  sctx.fillStyle = sgrad;
+  sctx.fillRect(0, 0, 64, 64);
+  const contactShadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(length * 1.15, width * 1.5),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false }),
+  );
+  contactShadow.rotation.x = -Math.PI / 2;
+  contactShadow.position.y = 0.02;
+  contactShadow.renderOrder = 1;
+  group.add(contactShadow);
+
   // Wheels.
   const wheelThickness = width * 0.22;
   const wheels: THREE.Group[] = [];

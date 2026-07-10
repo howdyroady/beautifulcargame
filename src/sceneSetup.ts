@@ -17,9 +17,10 @@ export interface SceneRig {
   setBoostFov: (active: boolean) => void;
 }
 
-/** Simple unlit gradient sky dome — kept fully independent of scene.background/environment so a
+/** Gradient sky dome + starfield — kept fully independent of scene.background/environment so a
  *  texture problem here can never blank out the lit scene (bit us once already). */
-function buildSkyDome(): THREE.Mesh {
+function buildSkyDome(): THREE.Group {
+  const group = new THREE.Group();
   const canvas = document.createElement('canvas');
   canvas.width = 2;
   canvas.height = 256;
@@ -40,7 +41,28 @@ function buildSkyDome(): THREE.Mesh {
   const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false });
   const dome = new THREE.Mesh(geo, mat);
   dome.renderOrder = -1;
-  return dome;
+  group.add(dome);
+
+  // Starfield across the upper hemisphere; bloom makes the brighter ones twinkle-glow.
+  const starCount = 350;
+  const positions = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount; i++) {
+    const azimuth = Math.random() * Math.PI * 2;
+    const elevation = Math.asin(0.15 + Math.random() * 0.85); // keep off the horizon band
+    const r = 172;
+    positions[i * 3] = Math.cos(azimuth) * Math.cos(elevation) * r;
+    positions[i * 3 + 1] = Math.sin(elevation) * r;
+    positions[i * 3 + 2] = Math.sin(azimuth) * Math.cos(elevation) * r;
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const stars = new THREE.Points(
+    starGeo,
+    new THREE.PointsMaterial({ color: 0xcfe0ff, size: 1.3, sizeAttenuation: false, transparent: true, opacity: 0.85, fog: false }),
+  );
+  stars.renderOrder = -1;
+  group.add(stars);
+  return group;
 }
 
 export function createSceneRig(container: HTMLElement): SceneRig {
@@ -51,13 +73,20 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   skyDome.userData.persistent = true;
   scene.add(skyDome);
 
+  // Phones get a lower pixel-ratio cap and smaller shadow maps — high-DPI mobile screens
+  // otherwise push 3-4x the fragments of a laptop and tank straight below 30fps.
+  const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouch ? 1.5 : 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
   container.appendChild(renderer.domElement);
+
+  const vignette = document.createElement('div');
+  vignette.className = 'vignette';
+  container.appendChild(vignette);
 
   // Baseline scene lighting fill: PBR materials at any real metalness/roughness read far too dark
   // without an environment map to sample, even for the flat platform/hazard meshes, not just the
@@ -77,7 +106,7 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   const sun = new THREE.DirectionalLight(0xfff2e0, 1.4);
   sun.position.set(18, 26, 10);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
   sun.shadow.camera.left = -30;
   sun.shadow.camera.right = 30;
   sun.shadow.camera.top = 30;
@@ -93,7 +122,9 @@ export function createSceneRig(container: HTMLElement): SceneRig {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.4, 0.82);
+  // Threshold close to 1 so only genuinely emissive things glow (neon, LEDs, pickups) —
+  // a lower threshold made bright-but-lit surfaces like road markings bloom into a white haze.
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.45, 0.35, 0.9);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -117,7 +148,7 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   resize();
 
   const render = () => {
-    const targetFov = boostFovActive ? baseFov + 6 : baseFov;
+    const targetFov = boostFovActive ? baseFov + 10 : baseFov;
     currentFov += (targetFov - currentFov) * 0.08;
     if (Math.abs(currentFov - camera.fov) > 0.01) {
       camera.fov = currentFov;

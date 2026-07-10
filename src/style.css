@@ -543,3 +543,31 @@ canvas {
   font-size: 0.75rem;
   opacity: 0.8;
 }
+
+/* Zoom-safety: manipulation kills double-tap-zoom + 300ms delay on all interactive elements. */
+button, input, .mode-btn, .menu-btn {
+  touch-action: manipulation;
+}
+
+/* Cinematic vignette (cheap: pure CSS, sits between canvas and HUD). */
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  background: radial-gradient(ellipse at center, transparent 52%, rgba(0, 0, 5, 0.5) 100%);
+}
+
+/* On phones the joystick (left) and brake/nitro (right) own the bottom edge — lift the
+   center speed/nitro cluster above them. */
+@media (max-width: 760px) {
+  .arcade-bottom {
+    bottom: 9.5rem;
+  }
+  .arcade-speed {
+    font-size: 2rem;
+  }
+  .nitro-bar {
+    width: 10rem;
+  }
+}

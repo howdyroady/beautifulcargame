@@ -20,6 +20,23 @@ import { deriveDerbyBotInput } from './ai/botController';
 import { engineSound } from './audio/engineSound';
 import type { CarEntity } from './game/carEntity';
 
+// --- Mobile zoom traps -----------------------------------------------------
+// iOS Safari ignores user-scalable=no: pinch and double-tap still zoom, and once zoomed the
+// pointer coordinates no longer match layout space — the joystick reads garbage and the player
+// is stuck. Block both gestures at the document level.
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+document.addEventListener('gesturechange', (e) => e.preventDefault());
+let lastTouchEnd = 0;
+document.addEventListener(
+  'touchend',
+  (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd < 350) e.preventDefault(); // double-tap zoom
+    lastTouchEnd = now;
+  },
+  { passive: false },
+);
+
 const app = document.getElementById('app')!;
 const rig = createSceneRig(app);
 

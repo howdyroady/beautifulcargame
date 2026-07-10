@@ -212,6 +212,11 @@ export class Circuit {
     const railMat = new THREE.MeshStandardMaterial({ color: 0x8a8d94, roughness: 0.7, metalness: 0.2 });
     const count = SEGMENTS * 2;
     const mesh = new THREE.InstancedMesh(railGeo, railMat, count);
+    // Emissive neon strip riding on top of every rail segment — with bloom this outlines the
+    // whole circuit like a night race.
+    const neonGeo = new THREE.BoxGeometry(1, 0.08, 1);
+    const neonMat = new THREE.MeshStandardMaterial({ color: 0x40d0ff, emissive: 0x1090ff, emissiveIntensity: 1.6, roughness: 0.3 });
+    const neon = new THREE.InstancedMesh(neonGeo, neonMat, count);
     const dummy = new THREE.Object3D();
     let idx = 0;
     for (let i = 0; i < SEGMENTS; i++) {
@@ -230,7 +235,13 @@ export class Circuit {
         dummy.rotation.set(0, -angle, 0);
         dummy.scale.set(len, 1, 0.25);
         dummy.updateMatrix();
-        mesh.setMatrixAt(idx++, dummy.matrix);
+        mesh.setMatrixAt(idx, dummy.matrix);
+
+        dummy.position.y = WALL_HEIGHT * 0.5 + 0.04;
+        dummy.scale.set(len, 1, 0.12);
+        dummy.updateMatrix();
+        neon.setMatrixAt(idx, dummy.matrix);
+        idx++;
 
         if (world) {
           const body = new CANNON.Body({ mass: 0 });
@@ -244,6 +255,7 @@ export class Circuit {
     }
     mesh.castShadow = true;
     this.scene.add(mesh);
+    this.scene.add(neon);
   }
 
   private buildPads() {
@@ -299,7 +311,8 @@ export class Circuit {
       ctx.fillRect(i * 4, 4, 4, 4);
     }
     const tex = new THREE.CanvasTexture(canvas);
-    const line = new THREE.Mesh(new THREE.PlaneGeometry(2, this.config.width), new THREE.MeshBasicMaterial({ map: tex }));
+    // Standard (lit) material: an unlit Basic checkerboard at full white blows out the bloom pass.
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(2, this.config.width), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }));
     line.rotation.x = -Math.PI / 2;
     line.rotation.z = -Math.atan2(tangent.z, tangent.x);
     line.position.set(pos.x, 0.02, pos.z);

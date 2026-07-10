@@ -63,6 +63,12 @@ export class TouchControls {
   private onStart = (e: PointerEvent) => {
     e.preventDefault();
     this.pointerId = e.pointerId;
+    // Capture keeps move/up events flowing to us even when the finger drags off the pad.
+    try {
+      this.base.setPointerCapture(e.pointerId);
+    } catch {
+      /* older browsers */
+    }
     const rect = this.base.getBoundingClientRect();
     this.baseCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     this.updateFromEvent(e);
