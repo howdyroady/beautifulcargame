@@ -7,7 +7,7 @@ function formatTime(t: number): string {
   return `${m}:${String(s).padStart(2, '0')}.${tenth}`;
 }
 
-/** Full race HUD: position + lap top-center, timer top-right, speed + nitro bottom, results overlay. */
+/** Full race HUD: position, lap, timer, speed, nitro, drift combo, results overlay. */
 export class ArcadeHud {
   root: HTMLDivElement;
   private posEl: HTMLDivElement;
@@ -17,6 +17,8 @@ export class ArcadeHud {
   private nitroFill: HTMLDivElement;
   private center: HTMLDivElement;
   private resultsEl: HTMLDivElement;
+  private driftCombo: HTMLDivElement;
+  private driftTimer = 0;
 
   constructor(container: HTMLElement, callbacks: { onRestart: () => void; onMenu: () => void }) {
     this.root = document.createElement('div');
@@ -30,6 +32,7 @@ export class ArcadeHud {
           <div class="arcade-time" data-time>0:00.0</div>
         </div>
       </div>
+      <div class="drift-combo" data-drift></div>
       <div class="arcade-bottom">
         <div class="arcade-speed"><span data-speed>0</span><small>km/h</small></div>
         <div class="nitro-bar"><div class="nitro-fill" data-nitro></div><span class="nitro-label">NITRO</span></div>
@@ -51,6 +54,7 @@ export class ArcadeHud {
     this.nitroFill = this.root.querySelector('[data-nitro]') as HTMLDivElement;
     this.center = this.root.querySelector('[data-center]') as HTMLDivElement;
     this.resultsEl = this.root.querySelector('[data-results]') as HTMLDivElement;
+    this.driftCombo = this.root.querySelector('[data-drift]') as HTMLDivElement;
 
     const btnStyle = (sel: string, fn: () => void) => {
       const el = this.root.querySelector(sel) as HTMLButtonElement;
@@ -71,11 +75,30 @@ export class ArcadeHud {
     this.nitroFill.classList.toggle('full', h.nitro > 0.95);
   }
 
+  /** Show drift combo indicator. Call every frame with drift state. */
+  setDrift(isDrifting: boolean, comboMultiplier: number, nitroEarned: number) {
+    if (isDrifting && comboMultiplier > 1.0) {
+      this.driftCombo.textContent = `🔥 DRIFT ×${comboMultiplier.toFixed(1)}  +${Math.round(nitroEarned * 100)}%`;
+      this.driftCombo.classList.add('active');
+      this.driftTimer = 1.5;
+    } else {
+      this.driftTimer -= 1 / 60;
+      if (this.driftTimer <= 0) {
+        this.driftCombo.classList.remove('active');
+      }
+    }
+  }
+
   setCountdown(remaining: number) {
     const n = Math.ceil(remaining);
-    this.center.textContent = n > 0 ? String(n) : 'LOS!';
-    this.center.className = 'hud-center-text countdown';
-    if (remaining <= 0) setTimeout(() => (this.center.textContent = ''), 800);
+    if (n > 0) {
+      this.center.textContent = String(n);
+      this.center.className = 'hud-center-text countdown pulse';
+    } else {
+      this.center.textContent = 'LOS!';
+      this.center.className = 'hud-center-text countdown go-flash';
+      setTimeout(() => (this.center.textContent = ''), 800);
+    }
   }
 
   showResults(standings: StandingEntry[]) {

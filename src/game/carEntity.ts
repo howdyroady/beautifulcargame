@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createCarModel, type CarModel } from '../car/carModel';
-import { createCarBody, applyCarControl, DEFAULT_CAR_CONFIG } from '../physics/carPhysics';
+import { createCarBody, applyCarControl, computeSlipAngle, DEFAULT_CAR_CONFIG } from '../physics/carPhysics';
 import { computeComebackBuff } from './comeback';
 import type { CarInput } from '../input/input';
 import type { ParticlePool } from '../effects/particles';
@@ -23,9 +23,15 @@ export class CarEntity {
   hp = MAX_HP;
   alive = true;
   effects: CarEffects = { shieldCharges: 0, ramUntil: 0, nitroUntil: 0, empUntil: 0 };
+  /** Current drift/slip angle in radians. */
+  slipAngle = 0;
+  /** True if the car is currently in a drift (slip > threshold). */
+  isDrifting = false;
   private lastHitAt = 0;
   private smokeTimer = 0;
   matchTime = 0;
+  private suspensionOffset = 0;
+  private lastVelY = 0;
 
   constructor(
     scene: THREE.Scene,
@@ -57,7 +63,7 @@ export class CarEntity {
         this.effects.nitroUntil = now + 3;
         break;
       case 'emp':
-        this.effects.empUntil = now + 2; // applied to the *opponent* by caller
+        this.effects.empUntil = now + 2;
         break;
     }
   }
@@ -74,14 +80,12 @@ export class CarEntity {
     return this.matchTime < this.effects.nitroUntil ? 1.6 : 1;
   }
 
-  /** Approximate real-world km/h for the HUD speedometer — the sim's units aren't literally meters/second. */
   get speedKmh() {
-    return Math.hypot(this.body.velocity.x, this.body.velocity.z) * 11;
+    return Math.hypot(this.body.velocity.x, this.body.velocity.z) * 12;
   }
 
-  /** Returns true if the hit was absorbed by a shield instead of dealing damage. */
   takeDamage(amount: number, now: number): boolean {
-    if (now - this.lastHitAt < 0.35) return true; // brief i-frame to avoid multi-tick damage while pushing
+    if (now - this.lastHitAt < 0.35) return true;
     this.lastHitAt = now;
     if (this.effects.shieldCharges > 0) {
       this.effects.shieldCharges -= 1;
@@ -114,10 +118,25 @@ export class CarEntity {
     applyCarControl(this.body, effectiveInput, dt, DEFAULT_CAR_CONFIG, speedMult, comeback.handlingMultiplier);
 
     if (terrainEffect.boostX !== 0 || terrainEffect.boostZ !== 0) {
-      this.body.applyForce(new CANNON.Vec3(terrainEffect.boostX * 40, 0, terrainEffect.boostZ * 40), new CANNON.Vec3());
+      this.body.applyForce(new CANNON.Vec3(terrainEffect.boostX * 45, 0, terrainEffect.boostZ * 45), new CANNON.Vec3());
     }
 
+    // Drift detection
+    this.slipAngle = computeSlipAngle(this.body);
+    this.isDrifting = this.slipAngle > 0.25 && Math.hypot(this.body.velocity.x, this.body.velocity.z) > 5;
+
+    // Visual suspension: body bobs on vertical velocity changes (landing, bumps)
+    const velYDelta = this.body.velocity.y - this.lastVelY;
+    this.lastVelY = this.body.velocity.y;
+    this.suspensionOffset += velYDelta * 0.015;
+    this.suspensionOffset *= 0.88; // dampen
+
     this.syncMesh();
+
+    // Brake lights
+    this.model.setBrakeLights?.(input.brake);
+    this.model.setNitroGlow?.(this.nitroSpeedMultiplier > 1);
+
     if (particles) this.updateEffects(dt, input, particles);
   }
 
@@ -132,22 +151,43 @@ export class CarEntity {
     const speed = Math.hypot(this.body.velocity.x, this.body.velocity.z);
     const forward = this.forwardVector();
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
-    const rearCenter = new THREE.Vector3(this.body.position.x, 0.15, this.body.position.z).addScaledVector(forward, -this.model.dims.length * 0.42);
+    const rearCenter = new THREE.Vector3(this.body.position.x, 0.15, this.body.position.z)
+      .addScaledVector(forward, -this.model.dims.length * 0.42);
 
-    const drifting = Math.abs(input.steer) > 0.6 && speed > 4;
+    // Drift smoke (thicker when drifting hard)
+    const drifting = this.isDrifting;
     const braking = input.brake && speed > 3;
     if ((drifting || braking) && this.smokeTimer <= 0) {
-      this.smokeTimer = 0.06;
+      this.smokeTimer = drifting ? 0.04 : 0.06;
       for (const side of [-1, 1]) {
         const pos = rearCenter.clone().addScaledVector(right, side * this.model.dims.width * 0.4);
-        const vel = new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.5 + Math.random() * 0.4, (Math.random() - 0.5) * 0.6);
-        particles.spawn(pos, vel, { life: 0.7, size: 0.32, color: 0xbfc2c8, opacity: 0.32, growth: 0.55 });
+        const vel = new THREE.Vector3(
+          (Math.random() - 0.5) * 0.7,
+          0.6 + Math.random() * 0.5,
+          (Math.random() - 0.5) * 0.7,
+        );
+        particles.spawn(pos, vel, {
+          life: drifting ? 0.9 : 0.6,
+          size: drifting ? 0.42 : 0.3,
+          color: 0xbfc2c8,
+          opacity: drifting ? 0.4 : 0.28,
+          growth: 0.65,
+        });
+      }
+      // Drift sparks
+      if (drifting && Math.random() > 0.5) {
+        const sparkPos = rearCenter.clone().addScaledVector(right, (Math.random() > 0.5 ? 1 : -1) * this.model.dims.width * 0.45);
+        sparkPos.y = 0.05;
+        particles.spawnBurst(sparkPos, 2, { color: 0xffaa30 });
       }
     }
 
+    // Nitro exhaust flames
     if (this.nitroSpeedMultiplier > 1) {
-      const vel = forward.clone().multiplyScalar(-3).add(new THREE.Vector3(0, 0.3, 0));
-      particles.spawn(rearCenter, vel, { life: 0.35, size: 0.28, color: 0x6fd0ff, opacity: 0.8, growth: 0.9, additive: true });
+      for (const side of [-1, 1]) {
+        const exhaustPos = rearCenter.clone().addScaledVector(right, side * this.model.dims.width * 0.25);
+        particles.spawnFlame(exhaustPos, forward);
+      }
     }
   }
 
@@ -170,11 +210,20 @@ export class CarEntity {
   }
 
   private syncMesh() {
-    this.model.group.position.set(this.body.position.x, this.body.position.y, this.body.position.z);
-    this.model.group.quaternion.set(this.body.quaternion.x, this.body.quaternion.y, this.body.quaternion.z, this.body.quaternion.w);
+    this.model.group.position.set(
+      this.body.position.x,
+      this.body.position.y + this.suspensionOffset,
+      this.body.position.z,
+    );
+    this.model.group.quaternion.set(
+      this.body.quaternion.x,
+      this.body.quaternion.y,
+      this.body.quaternion.z,
+      this.body.quaternion.w,
+    );
     const speed = Math.hypot(this.body.velocity.x, this.body.velocity.z);
     for (const wheel of this.model.wheels) {
-      wheel.rotation.z -= speed * 0.12; // wheels are built with their axle along local Z
+      wheel.rotation.z -= speed * 0.13;
     }
   }
 }
