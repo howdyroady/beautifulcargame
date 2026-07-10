@@ -39,15 +39,17 @@ export class Match {
   private lastWinner?: number;
   matchTime = 0;
 
-  constructor(scene: THREE.Scene, callbacks: MatchCallbacks = {}) {
+  constructor(scene: THREE.Scene, callbacks: MatchCallbacks = {}, playerColor = 0x9aa0a8) {
     this.scene = scene;
     this.callbacks = callbacks;
     this.arena = new Arena(scene, this.physics.world, this.physics.groundMaterial);
     this.powerups = new PowerupManager(scene, () => this.arena.radius);
     this.particles = new ParticlePool(scene);
 
-    const carA = new CarEntity(scene, this.physics.world, this.physics.carMaterial, 0x9aa0a8, SPAWN_A, 0);
-    const carB = new CarEntity(scene, this.physics.world, this.physics.carMaterial, 0xb03030, SPAWN_B, Math.PI);
+    // Opponent color contrasts with whatever the player picked.
+    const opponentColor = playerColor === 0xa02828 ? 0x2054c0 : 0xb03030;
+    const carA = new CarEntity(scene, this.physics.world, this.physics.carMaterial, playerColor, SPAWN_A, 0);
+    const carB = new CarEntity(scene, this.physics.world, this.physics.carMaterial, opponentColor, SPAWN_B, Math.PI);
     this.cars = [carA, carB];
 
     this.setupCollisionDamage();

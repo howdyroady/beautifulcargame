@@ -173,3 +173,19 @@ export function updateArenaCamera(camera: THREE.PerspectiveCamera, positions: { 
   camera.position.lerp(targetPos, 0.06);
   camera.lookAt(cx, 0, cz);
 }
+
+/** Asphalt-style chase camera: sits behind the car along its heading, drops lower and pulls back with speed. */
+export function updateChaseCamera(
+  camera: THREE.PerspectiveCamera,
+  target: { x: number; z: number; headingX: number; headingZ: number; speed: number },
+) {
+  const back = 8 + Math.min(4, target.speed * 0.12);
+  const height = 3.6 + Math.min(1.5, target.speed * 0.03);
+  const desired = new THREE.Vector3(
+    target.x - target.headingX * back,
+    height,
+    target.z - target.headingZ * back,
+  );
+  camera.position.lerp(desired, 0.09);
+  camera.lookAt(target.x + target.headingX * 6, 1.1, target.z + target.headingZ * 6);
+}

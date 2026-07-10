@@ -12,9 +12,11 @@ export class TouchControls {
   private base: HTMLDivElement;
   private brakeBtn: HTMLDivElement;
   private pointerId: number | null = null;
+  private nitroBtn: HTMLDivElement;
   private dx = 0;
   private dy = 0;
   private brakeHeld = false;
+  private nitroHeld = false;
   private baseCenter = { x: 0, y: 0 };
   private maxRadius = 55;
 
@@ -25,6 +27,7 @@ export class TouchControls {
       <div class="touch-joy-base" data-joy-base>
         <div class="touch-joy-knob" data-joy-knob></div>
       </div>
+      <div class="touch-nitro" data-nitro>NITRO</div>
       <div class="touch-brake" data-brake>BREMSE</div>
     `;
     container.appendChild(this.root);
@@ -32,24 +35,29 @@ export class TouchControls {
     this.base = this.root.querySelector('[data-joy-base]') as HTMLDivElement;
     this.knob = this.root.querySelector('[data-joy-knob]') as HTMLDivElement;
     this.brakeBtn = this.root.querySelector('[data-brake]') as HTMLDivElement;
+    this.nitroBtn = this.root.querySelector('[data-nitro]') as HTMLDivElement;
 
     this.base.addEventListener('pointerdown', this.onStart);
     window.addEventListener('pointermove', this.onMove);
     window.addEventListener('pointerup', this.onEnd);
     window.addEventListener('pointercancel', this.onEnd);
 
-    this.brakeBtn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      this.brakeHeld = true;
-      this.brakeBtn.classList.add('active');
-    });
-    const releaseBrake = () => {
-      this.brakeHeld = false;
-      this.brakeBtn.classList.remove('active');
+    const bindHold = (el: HTMLDivElement, set: (v: boolean) => void) => {
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        set(true);
+        el.classList.add('active');
+      });
+      const release = () => {
+        set(false);
+        el.classList.remove('active');
+      };
+      el.addEventListener('pointerup', release);
+      el.addEventListener('pointercancel', release);
+      el.addEventListener('pointerleave', release);
     };
-    this.brakeBtn.addEventListener('pointerup', releaseBrake);
-    this.brakeBtn.addEventListener('pointercancel', releaseBrake);
-    this.brakeBtn.addEventListener('pointerleave', releaseBrake);
+    bindHold(this.brakeBtn, (v) => (this.brakeHeld = v));
+    bindHold(this.nitroBtn, (v) => (this.nitroHeld = v));
   }
 
   private onStart = (e: PointerEvent) => {
@@ -88,11 +96,12 @@ export class TouchControls {
   }
 
   read(): CarInput {
-    if (this.pointerId === null && !this.brakeHeld) return NEUTRAL_INPUT;
+    if (this.pointerId === null && !this.brakeHeld && !this.nitroHeld) return NEUTRAL_INPUT;
     return {
       throttle: Math.abs(this.dy) > 0.08 ? -this.dy : 0,
       steer: Math.abs(this.dx) > 0.08 ? this.dx : 0,
       brake: this.brakeHeld,
+      nitro: this.nitroHeld,
     };
   }
 
@@ -110,5 +119,6 @@ export function combineInputs(keyboard: CarInput, touch: CarInput): CarInput {
     throttle: touch.throttle !== 0 ? touch.throttle : keyboard.throttle,
     steer: touch.steer !== 0 ? touch.steer : keyboard.steer,
     brake: touch.brake || keyboard.brake,
+    nitro: touch.nitro || keyboard.nitro,
   };
 }

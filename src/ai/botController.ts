@@ -49,7 +49,7 @@ export function deriveDerbyBotInput(bot: CarEntity, opponent: CarEntity, arenaRa
   }
 
   const steer = steerToward(bot, dirX, dirZ);
-  return { throttle: 1, steer, brake: false };
+  return { throttle: 1, steer, brake: false, nitro: false };
 }
 
 /**
@@ -70,5 +70,5 @@ export function deriveRaceBotInput(bot: CarEntity, midRadius: number): CarInput 
   const dirX = tangentX + correctionX;
   const dirZ = tangentZ + correctionZ;
   const steer = steerToward(bot, dirX, dirZ);
-  return { throttle: 1, steer, brake: false };
+  return { throttle: 1, steer, brake: false, nitro: false };
 }

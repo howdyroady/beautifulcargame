@@ -1,6 +1,5 @@
 import type { CarInput } from '../input/input';
 import type { MatchPhase } from '../game/matchState';
-import type { RacePhase } from '../game/raceState';
 import type { HazardType } from '../arena/arena';
 
 export interface InputMessage {
@@ -52,11 +51,14 @@ export interface StateMessage {
 
 export interface RaceStateMessage {
   t: 'race-state';
-  phase: RacePhase;
+  phase: 'countdown' | 'racing' | 'finished';
   countdown: number;
   winner?: number;
+  trackId: string;
+  time: number;
   laps: [number, number];
   places: [number, number];
+  nitro: [number, number];
   cars: [CarSnapshot, CarSnapshot];
 }
 

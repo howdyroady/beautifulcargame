@@ -99,7 +99,9 @@ export class CarEntity {
     this.matchTime += dt;
     const comeback = computeComebackBuff(this.hp, MAX_HP);
     const speedMult = comeback.speedMultiplier * this.nitroSpeedMultiplier * terrainEffect.friction;
-    const effectiveInput: CarInput = this.isEmpDisabled ? { throttle: input.throttle * 0.3, steer: input.steer * -0.4, brake: input.brake } : input;
+    const effectiveInput: CarInput = this.isEmpDisabled
+      ? { throttle: input.throttle * 0.3, steer: input.steer * -0.4, brake: input.brake, nitro: false }
+      : input;
 
     applyCarControl(this.body, effectiveInput, dt, DEFAULT_CAR_CONFIG, speedMult, comeback.handlingMultiplier);
 
