@@ -16,6 +16,8 @@ export interface TrackConfig {
   /** Curve parameters where nitro pickups float. */
   nitroPickupsAt: number[];
   buildings: boolean;
+  /** Terrain color around the road: dark plaza for the city, grass for the ring. */
+  groundColor: number;
 }
 
 export const TRACKS: Record<string, TrackConfig> = {
@@ -34,6 +36,7 @@ export const TRACKS: Record<string, TrackConfig> = {
     boostPadsAt: [0.3, 0.78],
     nitroPickupsAt: [0.18, 0.42, 0.68, 0.9],
     buildings: true,
+    groundColor: 0x15171d,
   },
   ring: {
     id: 'ring',
@@ -48,6 +51,7 @@ export const TRACKS: Record<string, TrackConfig> = {
     boostPadsAt: [0.5, 0.95],
     nitroPickupsAt: [0.12, 0.62],
     buildings: false,
+    groundColor: 0x17301e,
   },
 };
 
@@ -156,7 +160,7 @@ export class Circuit {
     // Surroundings: grass plane, buildings/trees, floodlights.
     const grass = new THREE.Mesh(
       new THREE.CircleGeometry(160, 48),
-      new THREE.MeshStandardMaterial({ color: 0x17301e, roughness: 1 }),
+      new THREE.MeshStandardMaterial({ color: config.groundColor, roughness: 1 }),
     );
     grass.rotation.x = -Math.PI / 2;
     grass.position.y = -0.05;

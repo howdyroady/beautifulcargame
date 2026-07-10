@@ -1,5 +1,17 @@
 * {
   box-sizing: border-box;
+  /* A long-press or drag that starts a text selection STEALS the touch gesture from the game —
+     the browser fires pointercancel, the joystick dies, and the blue selection highlight shows.
+     Nothing in the game is selectable text; only the join-code input opts back in below. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 html, body {
@@ -9,6 +21,7 @@ html, body {
   height: 100%;
   height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none; /* Chrome/Android pull-to-refresh would reload mid-race */
   background: #05060a;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   color: #e8e9ee;
@@ -570,4 +583,26 @@ button, input, .mode-btn, .menu-btn {
   .nitro-bar {
     width: 10rem;
   }
+}
+
+/* Radial nitro speed streaks (edges only, center stays clear). */
+.speedlines {
+  position: absolute;
+  inset: -12%;
+  pointer-events: none;
+  z-index: 9;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  background: repeating-conic-gradient(
+    from 0deg at 50% 50%,
+    rgba(255, 255, 255, 0) 0deg 9deg,
+    rgba(190, 225, 255, 0.14) 9.6deg 10.4deg,
+    rgba(255, 255, 255, 0) 11deg 14deg
+  );
+  -webkit-mask-image: radial-gradient(circle at center, transparent 42%, black 80%);
+  mask-image: radial-gradient(circle at center, transparent 42%, black 80%);
+}
+
+.speedlines.on {
+  opacity: 1;
 }

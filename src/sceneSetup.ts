@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -88,22 +88,30 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   vignette.className = 'vignette';
   container.appendChild(vignette);
 
-  // Baseline scene lighting fill: PBR materials at any real metalness/roughness read far too dark
-  // without an environment map to sample, even for the flat platform/hazard meshes, not just the
-  // car's metal parts. A generated room environment is a cheap stand-in for a real HDRI.
+  // Radial speed streaks, faded in while nitro is active (pure CSS, zero GPU cost).
+  const speedlines = document.createElement('div');
+  speedlines.className = 'speedlines';
+  container.appendChild(speedlines);
+
+  // Environment reflections come from the actual sunset sky dome instead of a generic room —
+  // the clearcoat car paint mirrors the horizon gradient, which reads far more "real".
+  // Direct lights below are raised to compensate for the darker ambient this produces.
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const envScene = new THREE.Scene();
+  envScene.add(buildSkyDome());
+  scene.environment = pmrem.fromScene(envScene, 0.03).texture;
+  scene.environmentIntensity = 2.4;
   pmrem.dispose();
 
   const baseFov = 58;
   const camera = new THREE.PerspectiveCamera(baseFov, 1, 0.1, 200);
   camera.position.set(0, 16, 20);
 
-  const hemi = new THREE.HemisphereLight(0x8899bb, 0x11141a, 0.9);
+  const hemi = new THREE.HemisphereLight(0x8899bb, 0x11141a, 2.0);
   hemi.userData.persistent = true;
   scene.add(hemi);
 
-  const sun = new THREE.DirectionalLight(0xfff2e0, 1.4);
+  const sun = new THREE.DirectionalLight(0xfff2e0, 1.9);
   sun.position.set(18, 26, 10);
   sun.castShadow = true;
   sun.shadow.mapSize.set(isTouch ? 1024 : 2048, isTouch ? 1024 : 2048);
@@ -177,6 +185,7 @@ export function createSceneRig(container: HTMLElement): SceneRig {
     },
     setBoostFov: (active: boolean) => {
       boostFovActive = active;
+      speedlines.classList.toggle('on', active);
     },
   };
 }

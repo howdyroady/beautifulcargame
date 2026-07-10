@@ -166,7 +166,7 @@ export class CarEntity {
     this.model.group.quaternion.set(this.body.quaternion.x, this.body.quaternion.y, this.body.quaternion.z, this.body.quaternion.w);
     const speed = Math.hypot(this.body.velocity.x, this.body.velocity.z);
     for (const wheel of this.model.wheels) {
-      wheel.rotation.x += speed * 0.12;
+      wheel.rotation.z -= speed * 0.12; // wheels are built with their axle along local Z
     }
   }
 }

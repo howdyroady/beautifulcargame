@@ -3,6 +3,7 @@ import * as CANNON from 'cannon-es';
 import { createPhysicsWorld } from '../physics/world';
 import { Circuit, TRACKS, type TrackConfig } from '../track/circuit';
 import { CarEntity } from './carEntity';
+import { attachHeadlights } from '../car/carModel';
 import { ParticlePool } from '../effects/particles';
 import { deriveRacerInput, type RacerAIState } from '../ai/racerAI';
 import type { CarInput } from '../input/input';
@@ -107,6 +108,7 @@ export class ArcadeRace {
         this.aiStates.push({ t: 0, skill: 0.93 + Math.random() * 0.09 });
       }
       this.attachCrashSound(car, i === 0);
+      if (i === 0) attachHeadlights(car.model); // real spotlights only on the player's car
     }
 
     this.callbacks.onPhaseChange?.(this.phase, { countdown: COUNTDOWN_SECONDS });

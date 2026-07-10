@@ -26,6 +26,13 @@ import type { CarEntity } from './game/carEntity';
 // is stuck. Block both gestures at the document level.
 document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('gesturechange', (e) => e.preventDefault());
+// Selection/context-menu on long-press also hijacks touches (see style.css note).
+document.addEventListener('selectstart', (e) => {
+  if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+});
+document.addEventListener('contextmenu', (e) => {
+  if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+});
 let lastTouchEnd = 0;
 document.addEventListener(
   'touchend',
