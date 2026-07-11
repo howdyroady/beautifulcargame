@@ -50,6 +50,19 @@ document.addEventListener(
 const app = document.getElementById('app')!;
 const rig = createSceneRig(app);
 
+// "Please rotate" hint — only shown on small screens held in portrait *while
+// playing* (CSS gates it on body.playing + orientation). Racing with the arrows
+// is far easier in landscape.
+const rotateHint = document.createElement('div');
+rotateHint.className = 'rotate-hint';
+rotateHint.innerHTML = `<div class="rotate-hint-icon">⟳</div><p>Für die beste Steuerung<br>Handy quer drehen</p>`;
+app.appendChild(rotateHint);
+
+/** Toggles the body.playing flag that gates in-game-only overlays (rotate hint). */
+function setPlaying(on: boolean) {
+  document.body.classList.toggle('playing', on);
+}
+
 let frameHandle = 0;
 function stopLoop() {
   if (frameHandle) cancelAnimationFrame(frameHandle);
@@ -76,6 +89,7 @@ function headingOf(car: CarEntity): { x: number; z: number } {
 function showMenu() {
   stopLoop();
   clearScene();
+  setPlaying(false);
   rig.setBoostFov(false);
 
   // 3D showroom behind the (translucent) menu: the currently selected car rotating on a plinth.
@@ -130,16 +144,19 @@ function showMenu() {
   const menu = new MainMenu(app, {
     onLocal: (sel) => {
       menu.destroy();
+      setPlaying(true);
       if (sel.mode === 'race') void startArcadeRace(sel);
       else if (sel.mode === 'parking') startParking(sel);
       else startLocalDerby(sel);
     },
     onHost: (sel) => {
       menu.destroy();
+      setPlaying(true);
       startHost(sel);
     },
     onJoin: (code, sel) => {
       menu.destroy();
+      setPlaying(true);
       startJoin(code, sel);
     },
   });
@@ -199,7 +216,7 @@ async function startArcadeRace(sel: MenuSelection) {
 
   const inputA = new KeyboardInputSource('wasd');
   const inputB = humanCount === 2 ? new KeyboardInputSource('arrows') : null;
-  const touch = isTouchDevice() ? new TouchControls(app) : null;
+  const touch = isTouchDevice() ? new TouchControls(app, 'race') : null;
 
   let last = performance.now();
   function loop(now: number) {
@@ -207,9 +224,15 @@ async function startArcadeRace(sel: MenuSelection) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
+    if (hud.paused) {
+      engineSound.setScreech(false);
+      rig.render();
+      return;
+    }
+
     let localA = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
-    // Asphalt-style auto-throttle on touch: the car always drives, the stick steers.
-    // Pulling the stick down still reverses, the button still brakes.
+    // Asphalt-style auto-throttle on touch: the car always drives, the arrows steer.
+    // The manual layouts (parking/derby) still send explicit gas/reverse instead.
     if (touch && localA.throttle === 0 && !localA.brake) localA = { ...localA, throttle: 1 };
     const inputs = inputB ? [localA, inputB.read()] : [localA];
     race.update(dt, inputs);
@@ -270,7 +293,7 @@ function startParking(sel: MenuSelection) {
   });
 
   const input = new KeyboardInputSource('wasd');
-  const touch = isTouchDevice() ? new TouchControls(app) : null;
+  const touch = isTouchDevice() ? new TouchControls(app, 'manual') : null;
 
   let last = performance.now();
   function loop(now: number) {
@@ -314,7 +337,7 @@ function startLocalDerby(sel: MenuSelection) {
   );
   const inputA = new KeyboardInputSource('wasd');
   const inputB = sel.vsBot ? null : new KeyboardInputSource('arrows');
-  const touch = isTouchDevice() ? new TouchControls(app) : null;
+  const touch = isTouchDevice() ? new TouchControls(app, 'manual') : null;
 
   let matchEndedAt = 0;
   let last = performance.now();
@@ -368,7 +391,7 @@ function startHost(sel: MenuSelection) {
       lobby.destroy();
       clearScene();
       const inputA = new KeyboardInputSource('wasd');
-      const touch = isTouchDevice() ? new TouchControls(app) : null;
+      const touch = isTouchDevice() ? new TouchControls(app, sel.mode === 'race' ? 'race' : 'manual') : null;
       let sendAccumulator = 0;
       let last = performance.now();
 
@@ -488,7 +511,7 @@ function startJoin(code: string, sel: MenuSelection) {
       lobby.destroy();
       clearScene();
       const input = new KeyboardInputSource('wasd');
-      const touch = isTouchDevice() ? new TouchControls(app) : null;
+      const touch = isTouchDevice() ? new TouchControls(app, sel.mode === 'race' ? 'race' : 'manual') : null;
       let sendAccumulator = 0;
       let last = performance.now();
       let derbyHud: Hud | null = null;

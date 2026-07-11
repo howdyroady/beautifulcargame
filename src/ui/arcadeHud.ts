@@ -7,9 +7,12 @@ function formatTime(t: number): string {
   return `${m}:${String(s).padStart(2, '0')}.${tenth}`;
 }
 
-/** Full race HUD: position, lap, timer, speed, nitro, drift combo, results overlay. */
+/** Full race HUD: position, lap, timer, speed, nitro, drift combo, pause + results overlays. */
 export class ArcadeHud {
   root: HTMLDivElement;
+  /** True while the pause overlay is open — the game loop freezes on this. */
+  paused = false;
+
   private posEl: HTMLDivElement;
   private lapEl: HTMLDivElement;
   private timeEl: HTMLDivElement;
@@ -17,6 +20,7 @@ export class ArcadeHud {
   private nitroFill: HTMLDivElement;
   private center: HTMLDivElement;
   private resultsEl: HTMLDivElement;
+  private pauseEl: HTMLDivElement;
   private driftCombo: HTMLDivElement;
   private driftTimer = 0;
 
@@ -25,7 +29,10 @@ export class ArcadeHud {
     this.root.className = 'hud';
     this.root.innerHTML = `
       <div class="arcade-top">
-        <div class="arcade-pos" data-pos>-</div>
+        <div class="arcade-topleft">
+          <button class="hud-pause" data-pause aria-label="Pause">II</button>
+          <div class="arcade-pos" data-pos>-</div>
+        </div>
         <div class="hud-center" data-center></div>
         <div class="arcade-right">
           <div class="arcade-lap" data-lap>RUNDE 1/3</div>
@@ -36,6 +43,14 @@ export class ArcadeHud {
       <div class="arcade-bottom">
         <div class="arcade-speed"><span data-speed>0</span><small>km/h</small></div>
         <div class="nitro-bar"><div class="nitro-fill" data-nitro></div><span class="nitro-label">NITRO</span></div>
+      </div>
+      <div class="pause-overlay" data-pause-overlay style="display:none">
+        <h2>PAUSE</h2>
+        <div class="results-buttons">
+          <button class="menu-btn menu-btn-small" data-resume>Weiter</button>
+          <button class="menu-btn menu-btn-small" data-prestart>Neustart</button>
+          <button class="menu-btn menu-btn-small" data-pmenu>Hauptmenü</button>
+        </div>
       </div>
       <div class="race-results" data-results style="display:none">
         <h2>ERGEBNIS</h2>
@@ -54,6 +69,7 @@ export class ArcadeHud {
     this.nitroFill = this.root.querySelector('[data-nitro]') as HTMLDivElement;
     this.center = this.root.querySelector('[data-center]') as HTMLDivElement;
     this.resultsEl = this.root.querySelector('[data-results]') as HTMLDivElement;
+    this.pauseEl = this.root.querySelector('[data-pause-overlay]') as HTMLDivElement;
     this.driftCombo = this.root.querySelector('[data-drift]') as HTMLDivElement;
 
     const btnStyle = (sel: string, fn: () => void) => {
@@ -63,6 +79,17 @@ export class ArcadeHud {
     };
     btnStyle('[data-restart]', callbacks.onRestart);
     btnStyle('[data-tomenu]', callbacks.onMenu);
+    btnStyle('[data-pause]', () => this.setPaused(true));
+    btnStyle('[data-resume]', () => this.setPaused(false));
+    btnStyle('[data-prestart]', callbacks.onRestart);
+    btnStyle('[data-pmenu]', callbacks.onMenu);
+  }
+
+  /** Open/close the pause overlay. The race loop reads `paused` to freeze the sim. */
+  setPaused(p: boolean) {
+    this.paused = p;
+    this.pauseEl.style.display = p ? 'flex' : 'none';
+    this.pauseEl.style.pointerEvents = p ? 'auto' : 'none';
   }
 
   setHud(h: { speed: number; nitro: number; lap: number; totalLaps: number; position: number; carCount: number; time: number }) {

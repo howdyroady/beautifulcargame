@@ -150,6 +150,28 @@ canvas {
   padding: 0.7rem 1rem;
 }
 
+/* Secondary/low-emphasis button (e.g. the collapsed online toggle) — keeps the
+   default menu clean so START is clearly the primary action. */
+.menu-btn-ghost {
+  background: rgba(30, 33, 42, 0.6);
+  color: #cfd2da;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35), 0 6px 14px rgba(0, 0, 0, 0.35);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.menu-btn-ghost:active {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35), 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+
+.menu-online {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem;
+  border-radius: 0.6rem;
+  background: rgba(0, 0, 0, 0.25);
+}
+
 .menu-join-row {
   display: flex;
   gap: 0.5rem;
@@ -270,45 +292,8 @@ canvas {
   pointer-events: none;
 }
 
-.touch-joy-base {
-  position: absolute;
-  left: 1.4rem;
-  bottom: 1.4rem;
-  width: 8.5rem;
-  height: 8.5rem;
-  border-radius: 50%;
-  background: rgba(30, 33, 42, 0.55);
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  pointer-events: auto;
-  touch-action: none;
-}
-
-.touch-joy-knob {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 3.6rem;
-  height: 3.6rem;
-  margin-left: -1.8rem;
-  margin-top: -1.8rem;
-  border-radius: 50%;
-  background: rgba(255, 74, 60, 0.85);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
-  transition: transform 0.02s linear;
-}
-
-.touch-brake {
-  position: absolute;
-  right: 1.6rem;
-  bottom: 1.8rem;
-  width: 5.2rem;
-  height: 5.2rem;
-  border-radius: 50%;
-  background: rgba(30, 33, 42, 0.55);
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  color: #f2f2f4;
-  font-weight: 800;
-  font-size: 0.75rem;
+/* Shared base for every on-screen control button. */
+.touch-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -316,10 +301,70 @@ canvas {
   pointer-events: auto;
   touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
+  font-weight: 800;
+  color: #f2f2f4;
+  background: rgba(30, 33, 42, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition: transform 0.05s ease, background 0.08s ease;
+}
+.touch-btn.active {
+  transform: scale(0.93);
 }
 
+/* Steering arrows sit bottom-left, thumb-sized and far apart. */
+.touch-steer {
+  position: absolute;
+  left: 1rem;
+  bottom: 1.3rem;
+  display: flex;
+  gap: 0.7rem;
+  pointer-events: none;
+}
+.touch-arrow {
+  width: 5.8rem;
+  height: 5.8rem;
+  border-radius: 1.6rem;
+  font-size: 3rem;
+  line-height: 1;
+  padding-bottom: 0.35rem;
+}
+.touch-arrow.active {
+  background: rgba(255, 74, 60, 0.5);
+  border-color: rgba(255, 120, 100, 0.75);
+}
+
+/* Action buttons stack bottom-right; primary action (nitro/gas) on top. */
+.touch-actions {
+  position: absolute;
+  right: 1.15rem;
+  bottom: 1.3rem;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0.75rem;
+  pointer-events: none;
+}
+.touch-actions .touch-btn {
+  width: 5.4rem;
+  height: 5.4rem;
+  border-radius: 50%;
+  font-size: 0.78rem;
+}
 .touch-brake.active {
   background: rgba(255, 74, 60, 0.55);
+}
+.touch-gas {
+  background: rgba(20, 80, 40, 0.5);
+  border-color: rgba(80, 220, 130, 0.5);
+  color: #b7f5cf;
+}
+.touch-gas.active {
+  background: rgba(30, 170, 80, 0.72);
+  color: #fff;
+}
+.touch-reverse.active {
+  background: rgba(255, 170, 40, 0.6);
 }
 
 .race-place {
@@ -390,6 +435,59 @@ canvas {
 
 .arcade-pos.leader {
   color: #40e0a0;
+}
+
+.arcade-topleft {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+/* Small always-visible pause button in the top-left of the race HUD. */
+.hud-pause {
+  pointer-events: auto;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 0.7rem;
+  background: rgba(20, 22, 30, 0.55);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  color: #f2f2f4;
+  font-weight: 900;
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+.hud-pause:hover {
+  background: rgba(40, 44, 56, 0.7);
+}
+
+.pause-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  background: rgba(4, 5, 10, 0.78);
+  z-index: 26;
+}
+.pause-overlay h2 {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #f2f2f4;
+  margin: 0;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 20px rgba(255, 70, 60, 0.6);
+}
+.pause-overlay .results-buttons {
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 12rem;
 }
 
 .arcade-right {
@@ -526,29 +624,14 @@ canvas {
   letter-spacing: 0.1em;
 }
 
-/* --- Touch nitro button --- */
+/* --- Touch nitro button (colours only; layout comes from .touch-actions) --- */
 .touch-nitro {
-  position: absolute;
-  right: 1.6rem;
-  bottom: 7.6rem;
-  width: 5.2rem;
-  height: 5.2rem;
-  border-radius: 50%;
-  background: rgba(16, 60, 90, 0.6);
-  border: 2px solid rgba(64, 208, 255, 0.5);
+  background: rgba(16, 60, 90, 0.62);
+  border-color: rgba(64, 208, 255, 0.5);
   color: #aee6ff;
-  font-weight: 800;
-  font-size: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-  touch-action: none;
-  user-select: none;
 }
-
 .touch-nitro.active {
-  background: rgba(16, 144, 255, 0.7);
+  background: rgba(16, 144, 255, 0.75);
   color: #fff;
 }
 
@@ -560,6 +643,38 @@ canvas {
 /* Zoom-safety: manipulation kills double-tap-zoom + 300ms delay on all interactive elements. */
 button, input, .mode-btn, .menu-btn {
   touch-action: manipulation;
+}
+
+/* "Rotate your phone" hint — hidden by default, revealed only mid-game on a
+   small portrait screen (see the media query below). */
+.rotate-hint {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  text-align: center;
+  background: rgba(4, 5, 10, 0.92);
+  color: #f2f2f4;
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+.rotate-hint-icon {
+  font-size: 3.4rem;
+  animation: rotate-hint-spin 2.2s ease-in-out infinite;
+}
+@keyframes rotate-hint-spin {
+  0%, 100% { transform: rotate(-18deg); }
+  50% { transform: rotate(72deg); }
+}
+@media (max-width: 900px) and (orientation: portrait) {
+  body.playing .rotate-hint {
+    display: flex;
+  }
 }
 
 /* Cinematic vignette (cheap: pure CSS, sits between canvas and HUD). */

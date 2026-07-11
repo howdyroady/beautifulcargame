@@ -6,150 +6,104 @@ export function isTouchDevice(): boolean {
 }
 
 /**
- * Virtual joystick + action buttons for phones/tablets.
+ * On-screen button controls for phones/tablets.
  *
- * **steeringOnly = true (default, for racing):**
- *   Stick moves horizontally only (like a steering wheel). The car auto-accelerates;
- *   main.ts injects throttle=1 unless braking. This fixes the old bug where a tiny
- *   vertical stick offset produced a throttle too weak to overcome static friction.
+ * The old virtual joystick was fiddly — you had to find the stick, and a small
+ * vertical wobble fought the steering. Players asked for plain arrows, so this
+ * is button-based: two big steering arrows on the left, action buttons on the
+ * right. Each button captures its own pointer, so multitouch (steer + nitro at
+ * once) works, and events can't be stolen by selection or other DOM.
  *
- * **steeringOnly = false (parking mode):**
- *   Stick Y axis controls forward/reverse as before.
+ * **layout 'race':** ◀ ▶ steer · NITRO · BREMSE. The car auto-accelerates
+ *   (main.ts injects throttle=1) so there's no gas button to hold.
  *
- * Pointer events use setPointerCapture on the base element and listen there (not on
- * window) — this prevents events being stolen by overlays, selection, or other DOM.
+ * **layout 'manual' (parking / derby):** ◀ ▶ steer · GAS · REVERSE (R).
+ *   Full throttle control for precise maneuvering and combat.
  */
+export type TouchLayout = 'race' | 'manual';
+
 export class TouchControls {
   root: HTMLDivElement;
-  steeringOnly = true;
+  readonly layout: TouchLayout;
 
-  private knob: HTMLDivElement;
-  private base: HTMLDivElement;
-  private brakeBtn: HTMLDivElement;
-  private nitroBtn: HTMLDivElement;
-  private pointerId: number | null = null;
-  private dx = 0;
-  private dy = 0;
+  private steerLeft = false;
+  private steerRight = false;
+  private gasHeld = false;
+  private reverseHeld = false;
   private brakeHeld = false;
   private nitroHeld = false;
-  private baseCenter = { x: 0, y: 0 };
-  private maxRadius = 55;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, layout: TouchLayout = 'race') {
+    this.layout = layout;
     this.root = document.createElement('div');
     this.root.className = 'touch-controls';
+
+    const actions =
+      layout === 'race'
+        ? `<div class="touch-btn touch-nitro" data-hold="nitro">NITRO</div>
+           <div class="touch-btn touch-brake" data-hold="brake">BREMSE</div>`
+        : `<div class="touch-btn touch-gas" data-hold="gas">GAS</div>
+           <div class="touch-btn touch-reverse" data-hold="reverse">R</div>`;
+
     this.root.innerHTML = `
-      <div class="touch-joy-base" data-joy-base>
-        <div class="touch-joy-track"></div>
-        <div class="touch-joy-knob" data-joy-knob></div>
+      <div class="touch-steer">
+        <div class="touch-btn touch-arrow" data-hold="left" aria-label="links">‹</div>
+        <div class="touch-btn touch-arrow" data-hold="right" aria-label="rechts">›</div>
       </div>
-      <div class="touch-nitro" data-nitro>NITRO</div>
-      <div class="touch-brake" data-brake>BREMSE</div>
+      <div class="touch-actions">${actions}</div>
     `;
     container.appendChild(this.root);
 
-    this.base = this.root.querySelector('[data-joy-base]') as HTMLDivElement;
-    this.knob = this.root.querySelector('[data-joy-knob]') as HTMLDivElement;
-    this.brakeBtn = this.root.querySelector('[data-brake]') as HTMLDivElement;
-    this.nitroBtn = this.root.querySelector('[data-nitro]') as HTMLDivElement;
+    const setters: Record<string, (v: boolean) => void> = {
+      left: (v) => (this.steerLeft = v),
+      right: (v) => (this.steerRight = v),
+      gas: (v) => (this.gasHeld = v),
+      reverse: (v) => (this.reverseHeld = v),
+      brake: (v) => (this.brakeHeld = v),
+      nitro: (v) => (this.nitroHeld = v),
+    };
 
-    // All pointer events on the base element via capture — never on window.
-    this.base.addEventListener('pointerdown', this.onStart);
-    this.base.addEventListener('pointermove', this.onMove);
-    this.base.addEventListener('pointerup', this.onEnd);
-    this.base.addEventListener('pointercancel', this.onEnd);
-    this.base.addEventListener('lostpointercapture', this.onEnd);
-
-    const bindHold = (el: HTMLDivElement, set: (v: boolean) => void) => {
-      el.addEventListener('pointerdown', (e) => {
+    this.root.querySelectorAll<HTMLDivElement>('[data-hold]').forEach((el) => {
+      const set = setters[el.dataset.hold!];
+      const press = (e: PointerEvent) => {
         e.preventDefault();
         e.stopPropagation();
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          /* older browsers */
+        }
         set(true);
         el.classList.add('active');
-      });
+      };
       const release = () => {
         set(false);
         el.classList.remove('active');
       };
+      el.addEventListener('pointerdown', press);
       el.addEventListener('pointerup', release);
       el.addEventListener('pointercancel', release);
-      el.addEventListener('pointerleave', release);
-    };
-    bindHold(this.brakeBtn, (v) => (this.brakeHeld = v));
-    bindHold(this.nitroBtn, (v) => (this.nitroHeld = v));
-  }
-
-  private onStart = (e: PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    this.pointerId = e.pointerId;
-    try {
-      this.base.setPointerCapture(e.pointerId);
-    } catch { /* older browsers */ }
-    const rect = this.base.getBoundingClientRect();
-    this.baseCenter = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    this.updateFromEvent(e);
-  };
-
-  private onMove = (e: PointerEvent) => {
-    if (this.pointerId !== e.pointerId) return;
-    e.preventDefault();
-    e.stopPropagation();
-    this.updateFromEvent(e);
-  };
-
-  private onEnd = (e: PointerEvent) => {
-    if (this.pointerId !== null && e.pointerId !== this.pointerId) return;
-    this.pointerId = null;
-    this.dx = 0;
-    this.dy = 0;
-    this.knob.style.transform = 'translate(0px, 0px)';
-  };
-
-  private updateFromEvent(e: PointerEvent) {
-    let dx = e.clientX - this.baseCenter.x;
-    let dy = e.clientY - this.baseCenter.y;
-
-    if (this.steeringOnly) {
-      // Horizontal only — like a steering wheel.
-      dy = 0;
-      dx = Math.max(-this.maxRadius, Math.min(this.maxRadius, dx));
-      this.knob.style.transform = `translate(${dx}px, 0px)`;
-    } else {
-      const dist = Math.hypot(dx, dy);
-      if (dist > this.maxRadius) {
-        dx = (dx / dist) * this.maxRadius;
-        dy = (dy / dist) * this.maxRadius;
-      }
-      this.knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    }
-    this.dx = dx / this.maxRadius;
-    this.dy = dy / this.maxRadius;
+      el.addEventListener('lostpointercapture', release);
+    });
   }
 
   read(): CarInput {
-    if (this.pointerId === null && !this.brakeHeld && !this.nitroHeld) return NEUTRAL_INPUT;
-    return {
-      // In steeringOnly mode, throttle is always 0 — main.ts handles auto-gas.
-      // In parking mode, dy maps to throttle as before.
-      throttle: this.steeringOnly ? 0 : (Math.abs(this.dy) > 0.06 ? -this.dy : 0),
-      steer: Math.abs(this.dx) > 0.04 ? this.dx : 0,
-      brake: this.brakeHeld,
-      nitro: this.nitroHeld,
-    };
+    const anyHeld =
+      this.steerLeft || this.steerRight || this.gasHeld || this.reverseHeld || this.brakeHeld || this.nitroHeld;
+    if (!anyHeld) return NEUTRAL_INPUT;
+    const steer = (this.steerRight ? 1 : 0) - (this.steerLeft ? 1 : 0);
+    // Race layout leaves throttle at 0 so main.ts can apply auto-gas; manual
+    // layout drives forward/back from the gas & reverse buttons.
+    const throttle = this.layout === 'manual' ? (this.gasHeld ? 1 : 0) - (this.reverseHeld ? 1 : 0) : 0;
+    return { throttle, steer, brake: this.brakeHeld, nitro: this.nitroHeld };
   }
 
   destroy() {
-    this.base.removeEventListener('pointerdown', this.onStart);
-    this.base.removeEventListener('pointermove', this.onMove);
-    this.base.removeEventListener('pointerup', this.onEnd);
-    this.base.removeEventListener('pointercancel', this.onEnd);
-    this.base.removeEventListener('lostpointercapture', this.onEnd);
     this.root.remove();
   }
 }
 
-/** Touch input wins over keyboard whenever it's actively being pushed. */
+/** Touch input wins over keyboard whenever a button is actively pressed. */
 export function combineInputs(keyboard: CarInput, touch: CarInput): CarInput {
   return {
     throttle: touch.throttle !== 0 ? touch.throttle : keyboard.throttle,

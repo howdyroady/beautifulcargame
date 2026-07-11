@@ -12,10 +12,9 @@ export interface CarChoice {
 }
 
 export const CAR_CHOICES: CarChoice[] = [
-  { id: 'silver', label: 'COUPE SILBER', color: 0x9199a1 },
-  { id: 'c63', label: 'AMG SCHWARZ', color: 0x1a1c20 },
-  { id: 'red', label: 'ROT', color: 0xa02828 },
-  { id: 'gt', label: 'GT (3D-MODELL)', color: 0xf0f0f0, modelUrl: 'models/toycar.glb' },
+  { id: 'silver', label: 'SILBER', color: 0x9199a1 },
+  { id: 'c63', label: 'SCHWARZ', color: 0x1a1c20 },
+  { id: 'gt', label: '3D-MODELL', color: 0xf0f0f0, modelUrl: 'models/toycar.glb' },
 ];
 
 export interface MenuSelection {
@@ -66,13 +65,16 @@ export class MainMenu {
       </div>
       <div class="menu-buttons">
         <button class="menu-btn" data-action="local">START</button>
-        <button class="menu-btn" data-action="host" data-race-derby-only>Online: Spiel erstellen</button>
-        <div class="menu-join-row" data-race-derby-only>
-          <input class="menu-input" data-join-code placeholder="CODE" maxlength="6" />
-          <button class="menu-btn menu-btn-small" data-action="join">Beitreten</button>
+        <button class="menu-btn menu-btn-ghost" data-action="online-toggle" data-race-derby-only>Online mit Freund ▾</button>
+        <div class="menu-online" data-online-panel style="display:none">
+          <button class="menu-btn menu-btn-small" data-action="host">Spiel erstellen</button>
+          <div class="menu-join-row">
+            <input class="menu-input" data-join-code placeholder="CODE" maxlength="6" />
+            <button class="menu-btn menu-btn-small" data-action="join">Beitreten</button>
+          </div>
         </div>
       </div>
-      <p class="menu-sub small">Steuerung: WASD + Shift (Bremse) + Space (Nitro) · Touch-Joystick auf dem Handy</p>
+      <p class="menu-sub small">Steuerung: WASD + Shift (Bremse) + Space (Nitro) · Pfeiltasten auf dem Handy</p>
     `;
     container.appendChild(this.root);
 
@@ -100,6 +102,14 @@ export class MainMenu {
     bindGroup('opponent', (v) => (this.sel.vsBot = v === 'bot'));
     bindGroup('scenario', (v) => (this.sel.scenario = v as ParkingScenario));
 
+    const onlinePanel = this.root.querySelector('[data-online-panel]') as HTMLElement;
+    const onlineToggle = this.root.querySelector('[data-action="online-toggle"]') as HTMLButtonElement;
+    onlineToggle.addEventListener('click', () => {
+      const open = onlinePanel.style.display === 'none';
+      onlinePanel.style.display = open ? 'flex' : 'none';
+      onlineToggle.textContent = open ? 'Online mit Freund ▴' : 'Online mit Freund ▾';
+    });
+
     this.root.querySelector('[data-action="local"]')!.addEventListener('click', () => callbacks.onLocal({ ...this.sel }));
     this.root.querySelector('[data-action="host"]')!.addEventListener('click', () => callbacks.onHost({ ...this.sel }));
     this.root.querySelector('[data-action="join"]')!.addEventListener('click', () => {
@@ -122,6 +132,13 @@ export class MainMenu {
     this.root.querySelectorAll<HTMLElement>('[data-parking-only]').forEach((el) => {
       el.style.display = mode === 'parking' ? '' : 'none';
     });
+    // The online panel is opened only via its toggle — keep it collapsed here so
+    // it never inherits the generic race/derby visibility above, and so switching
+    // modes always closes it.
+    const panel = this.root.querySelector('[data-online-panel]') as HTMLElement | null;
+    const toggle = this.root.querySelector('[data-action="online-toggle"]') as HTMLButtonElement | null;
+    if (panel) panel.style.display = 'none';
+    if (toggle) toggle.textContent = 'Online mit Freund ▾';
   }
 
   destroy() {

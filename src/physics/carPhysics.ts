@@ -100,13 +100,22 @@ export function applyCarControl(
   body.velocity.x -= right.x * velLateral * lateralGrip * dt * 12;
   body.velocity.z -= right.z * velLateral * lateralGrip * dt * 12;
 
-  // --- Steering ---
-  if (input.steer !== 0) {
-    const steerFactor = 0.3 + speedRatio * 0.7;
-    const direction = velForward < 0 ? -1 : 1;
-    const driftBonus = isDrifting ? 1.3 : 1.0;
-    body.angularVelocity.y += input.steer * config.turnRate * handlingMultiplier * steerFactor * direction * driftBonus * dt * 12;
-  }
+  // --- Steering (target yaw-rate model) ---
+  // The old model *accumulated* angular velocity every frame and clamped it,
+  // which felt twitchy and hard to hold a line — a tap kept rotating the car.
+  // Instead we pick a target yaw rate from the steer input and ease the car's
+  // actual yaw toward it. Holding steer turns exactly as hard as the input;
+  // releasing it snaps the target to 0 so the car straightens itself. This is
+  // the standard forgiving arcade-racer feel.
+  const speedFactor = Math.min(1, Math.abs(velForward) / 2.5); // can't pivot when nearly stopped
+  const steerAuthority = 1 - speedRatio * 0.3; // slightly calmer at top speed for stability
+  const direction = velForward < 0 ? -1 : 1; // steering inverts in reverse, like a real car
+  const driftBonus = isDrifting ? 1.25 : 1.0;
+  const targetYaw =
+    input.steer * config.turnRate * handlingMultiplier * steerAuthority * driftBonus * direction * speedFactor;
+  // Ease in quickly when steering, straighten a touch more gently when centered.
+  const yawResponse = input.steer !== 0 ? 9 : 6;
+  body.angularVelocity.y += (targetYaw - body.angularVelocity.y) * Math.min(1, dt * yawResponse);
 
   const maxAngular = 3.4 * handlingMultiplier;
   if (body.angularVelocity.y > maxAngular) body.angularVelocity.y = maxAngular;
