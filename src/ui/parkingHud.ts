@@ -1,3 +1,5 @@
+import { PauseOverlay } from './pauseOverlay';
+
 /** HUD for the parking mode: hint text, damage hearts, timer, and success/fail overlays. */
 export class ParkingHud {
   root: HTMLDivElement;
@@ -5,13 +7,22 @@ export class ParkingHud {
   private hitsEl: HTMLDivElement;
   private timeEl: HTMLDivElement;
   private overlay: HTMLDivElement;
+  private pause: PauseOverlay;
+
+  /** True while the pause overlay is open — the parking loop freezes on this. */
+  get paused() {
+    return this.pause.paused;
+  }
 
   constructor(container: HTMLElement, callbacks: { onRetry: () => void; onMenu: () => void }) {
     this.root = document.createElement('div');
     this.root.className = 'hud';
     this.root.innerHTML = `
       <div class="arcade-top">
-        <div class="parking-hits" data-hits>❤❤❤</div>
+        <div class="arcade-topleft">
+          <button class="hud-pause" data-pause aria-label="Pause">II</button>
+          <div class="parking-hits" data-hits>❤❤❤</div>
+        </div>
         <div class="parking-hint" data-hint></div>
         <div class="arcade-time" data-time>0:00</div>
       </div>
@@ -36,6 +47,11 @@ export class ParkingHud {
     };
     bind('[data-retry]', callbacks.onRetry);
     bind('[data-tomenu]', callbacks.onMenu);
+
+    this.pause = new PauseOverlay(this.root, this.root.querySelector('[data-pause]') as HTMLElement, {
+      onRestart: callbacks.onRetry,
+      onMenu: callbacks.onMenu,
+    });
   }
 
   setHud(h: { hits: number; maxHits: number; time: number; hint: string }) {

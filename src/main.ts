@@ -273,6 +273,8 @@ async function startArcadeRace(sel: MenuSelection) {
 function startParking(sel: MenuSelection) {
   stopLoop(); // the menu showroom loop is still ticking
   clearScene();
+  rig.setCameraTilt(0); // clear any leftover roll from a previous race
+  rig.setBoostFov(false);
   const hud = new ParkingHud(app, {
     onRetry: () => {
       hud.destroy();
@@ -301,15 +303,26 @@ function startParking(sel: MenuSelection) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
+    if (hud.paused) {
+      rig.render();
+      return;
+    }
+
     const localInput = touch ? combineInputs(input.read(), touch.read()) : input.read();
     parking.update(dt, localInput);
     engineSound.update(dt, parking.player.speedKmh, Math.abs(localInput.throttle) * 0.6, false);
 
-    // High, slightly tilted top-down view — you need to see the whole bay while maneuvering.
+    // Frame the car AND the target bay together, so you can always see where you're
+    // going and the cars you must avoid. Pull higher the further apart they are.
     const p = parking.player.body.position;
-    const camTarget = new THREE.Vector3(p.x, 20, p.z + 9);
-    rig.camera.position.lerp(camTarget, 0.08);
-    rig.camera.lookAt(p.x, 0, p.z);
+    const t = parking.targetPos;
+    const midX = (p.x + t.x) / 2;
+    const midZ = (p.z + t.z) / 2;
+    const sep = Math.hypot(p.x - t.x, p.z - t.z);
+    const height = 17 + sep * 0.85;
+    const camTarget = new THREE.Vector3(midX, height, midZ + 8);
+    rig.camera.position.lerp(camTarget, 0.1);
+    rig.camera.lookAt(midX, 0, midZ);
     rig.render();
   }
   frameHandle = requestAnimationFrame(loop);
@@ -321,7 +334,20 @@ function startParking(sel: MenuSelection) {
 function startLocalDerby(sel: MenuSelection) {
   stopLoop(); // the menu showroom loop is still ticking
   clearScene();
-  const hud = new Hud(app, ['SPIELER 1', sel.vsBot ? 'BOT' : 'SPIELER 2']);
+  const cleanup = () => {
+    hud.destroy();
+    touch?.destroy();
+  };
+  const hud = new Hud(app, ['SPIELER 1', sel.vsBot ? 'BOT' : 'SPIELER 2'], {
+    onRestart: () => {
+      cleanup();
+      startLocalDerby(sel);
+    },
+    onMenu: () => {
+      cleanup();
+      showMenu();
+    },
+  });
   const match = new Match(
     rig.scene,
     {
@@ -345,6 +371,11 @@ function startLocalDerby(sel: MenuSelection) {
     frameHandle = requestAnimationFrame(loop);
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+
+    if (hud.paused) {
+      rig.render();
+      return;
+    }
 
     const localA = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
     const bInput = sel.vsBot ? deriveDerbyBotInput(match.cars[1], match.cars[0], match.arena.radius) : inputB!.read();

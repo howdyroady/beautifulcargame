@@ -92,6 +92,11 @@ export class ParkingMode {
   private settleTimer = 0;
   private lastHitAt = -10;
 
+  /** World position of the target bay — used to frame the camera on car + goal. */
+  get targetPos(): { x: number; z: number } {
+    return { x: this.def.target.x, z: this.def.target.z };
+  }
+
   constructor(scene: THREE.Scene, scenario: ParkingScenario, playerColor: number, callbacks: ParkingCallbacks = {}) {
     this.scene = scene;
     this.callbacks = callbacks;
@@ -220,7 +225,15 @@ export class ParkingMode {
     if (this.phase !== 'driving') return;
     this.time += dt;
 
-    this.player.update(dt, input, { friction: 0.55, boostX: 0, boostZ: 0 }, this.particles); // parking speeds: heavily damped
+    // Parking wants a low top speed and precise stops, not the racing glide.
+    this.player.update(dt, input, { friction: 0.4, boostX: 0, boostZ: 0 }, this.particles);
+
+    // Extra rolling resistance so the car settles quickly when you ease off — with
+    // near-zero contact friction it would otherwise coast far past the bay.
+    const coasting = input.throttle === 0;
+    const damp = coasting ? 0.9 : 0.965;
+    this.player.body.velocity.x *= damp;
+    this.player.body.velocity.z *= damp;
 
     this.physics.step(dt);
     this.checkSuccess(dt);

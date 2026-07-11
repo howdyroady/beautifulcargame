@@ -1,5 +1,6 @@
 import type { MatchPhase } from '../game/matchState';
 import { SpeedGauge } from './speedGauge';
+import { PauseOverlay } from './pauseOverlay';
 
 export class Hud {
   root: HTMLDivElement;
@@ -8,13 +9,24 @@ export class Hud {
   private center: HTMLDivElement;
   private names: [string, string];
   private speedGauge: SpeedGauge;
+  private pause: PauseOverlay | null = null;
 
-  constructor(container: HTMLElement, names: [string, string] = ['SPIELER 1', 'SPIELER 2']) {
+  /** True while the pause overlay is open (only when pause callbacks were given). */
+  get paused() {
+    return this.pause?.paused ?? false;
+  }
+
+  constructor(
+    container: HTMLElement,
+    names: [string, string] = ['SPIELER 1', 'SPIELER 2'],
+    pauseCallbacks?: { onRestart: () => void; onMenu: () => void },
+  ) {
     this.names = names;
     this.root = document.createElement('div');
     this.root.className = 'hud';
     this.root.innerHTML = `
       <div class="hud-top">
+        ${pauseCallbacks ? '<button class="hud-pause" data-pause aria-label="Pause">II</button>' : ''}
         <div class="hud-player left">
           <div class="hud-name">${names[0]}</div>
           <div class="hud-hpbar"><div class="hud-hpfill" data-side="left"></div></div>
@@ -29,6 +41,9 @@ export class Hud {
       </div>
     `;
     container.appendChild(this.root);
+    if (pauseCallbacks) {
+      this.pause = new PauseOverlay(this.root, this.root.querySelector('[data-pause]') as HTMLElement, pauseCallbacks);
+    }
     this.hpBars = [
       this.root.querySelector('[data-side="left"]') as HTMLDivElement,
       this.root.querySelector('[data-side="right"]') as HTMLDivElement,
