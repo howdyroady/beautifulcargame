@@ -1,4 +1,5 @@
 import type { ParkingScenario } from '../game/parkingMode';
+import { TRACKS } from '../track/circuit';
 
 export type GameMode = 'race' | 'derby' | 'parking';
 
@@ -52,9 +53,7 @@ export class MainMenu {
         ${CAR_CHOICES.map((c, i) => `<button class="mode-btn ${i === 0 ? 'active' : ''}" data-val="${c.id}">${c.label}</button>`).join('')}
       </div>
       <div class="mode-toggle" data-group="track" data-race-only>
-        <button class="mode-btn active" data-val="city">CITY GP</button>
-        <button class="mode-btn" data-val="serpent">SERPENT</button>
-        <button class="mode-btn" data-val="ring">RING</button>
+        ${Object.values(TRACKS).map((t, i) => `<button class="mode-btn ${i === 0 ? 'active' : ''}" data-val="${t.id}">${t.name}</button>`).join('')}
       </div>
       <div class="mode-toggle" data-group="opponent" data-race-derby-only>
         <button class="mode-btn active" data-val="bot">GEGEN BOTS</button>
