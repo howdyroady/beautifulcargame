@@ -22,6 +22,13 @@ html, body {
   height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none; /* Chrome/Android pull-to-refresh would reload mid-race */
+  /* manipulation kills iOS double-tap-to-zoom on the page/HUD while still allowing
+     the menu to scroll. The canvas and controls override this to `none`. Once a
+     phone is double-tap-zoomed with user-scalable=no it can't be pinched back
+     out, so preventing the zoom is the only fix. */
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   background: #05060a;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   color: #e8e9ee;
@@ -204,6 +211,14 @@ canvas {
   padding: 0.7rem;
   border-radius: 0.6rem;
   background: rgba(0, 0, 0, 0.25);
+}
+
+/* Collapsible car/track/opponent options — keeps the default menu to Mode+START. */
+.menu-extra {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
 }
 
 .menu-join-row {

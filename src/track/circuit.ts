@@ -13,6 +13,8 @@ export interface TrackConfig {
   nitroPickupsAt: number[];
   buildings: boolean;
   groundColor: number;
+  /** Multiplier on the base traffic-car count (1 = normal, higher = busier). */
+  trafficDensity?: number;
 }
 
 export const TRACKS: Record<string, TrackConfig> = {
@@ -61,6 +63,24 @@ export const TRACKS: Record<string, TrackConfig> = {
     nitroPickupsAt: [0.12, 0.62],
     buildings: false,
     groundColor: 0x152e1a,
+  },
+  highway: {
+    id: 'highway',
+    name: 'HIGHWAY',
+    // Long straights (elongated ring) with NO jump pads — a proper highway you
+    // filter through dense traffic on, weaving left/right instead of jumping.
+    points: Array.from({ length: 24 }, (_, i) => {
+      const a = (i / 24) * Math.PI * 2;
+      return [Math.cos(a) * 24, Math.sin(a) * 82] as [number, number];
+    }),
+    width: 16,
+    laps: 3,
+    jumpPadsAt: [],
+    boostPadsAt: [0.24, 0.74],
+    nitroPickupsAt: [0.1, 0.35, 0.6, 0.85],
+    buildings: true,
+    groundColor: 0x0e1018,
+    trafficDensity: 2.2,
   },
   autobahn: {
     id: 'autobahn',

@@ -138,8 +138,9 @@ export class ArcadeRace {
       if (i === 0) attachHeadlights(car.model);
     }
 
-    if (opts.trafficCount && opts.trafficCount > 0) {
-      this.traffic = new Traffic(scene, this.physics.world, this.circuit, this.physics.carMaterial, opts.trafficCount);
+    const trafficN = Math.min(14, Math.round((opts.trafficCount ?? 0) * (this.config.trafficDensity ?? 1)));
+    if (trafficN > 0) {
+      this.traffic = new Traffic(scene, this.physics.world, this.circuit, this.physics.carMaterial, trafficN);
     }
 
     this.callbacks.onPhaseChange?.(this.phase, { countdown: COUNTDOWN_SECONDS });

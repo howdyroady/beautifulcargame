@@ -173,27 +173,49 @@ export class RaycastCar {
       this.body.velocity.z *= s;
     }
 
-    // --- Arcade stabilizer: keep the rubber side down. Suspension impulses at
-    // the contact points can pitch the chassis onto its nose/tail, where the
-    // box then rests on the ground with the wheels in the air — a stable but
-    // useless state. Damp pitch/roll rates and spring the up-vector back to
-    // vertical whenever tilt exceeds what normal body-roll needs.
+    this.keepUpright(dt);
+  }
+
+  /**
+   * Arcade anti-flip: this car must never end up on its roof/nose. Jump pads and
+   * hard hits used to launch it into a barrel roll it couldn't recover from.
+   * We damp pitch/roll rates, spring the up-vector back toward vertical, and —
+   * crucially — hard-clamp the tilt by directly re-orienting the chassis toward
+   * an upright, yaw-only pose once it leans past ~35°. Yaw (steering) is never
+   * touched, so it stays fully controllable.
+   */
+  private keepUpright(dt: number) {
     const up = new CANNON.Vec3(0, 1, 0);
     this.body.quaternion.vmult(up, up);
     const tilt = Math.acos(Math.min(1, Math.max(-1, up.y)));
-    const damp = Math.max(0, 1 - dt * 5);
+
+    // Always bleed pitch/roll spin (leave yaw — index y — alone).
+    const damp = Math.max(0, 1 - dt * 7);
     this.body.angularVelocity.x *= damp;
     this.body.angularVelocity.z *= damp;
-    if (tilt > 0.12) {
-      // Restoring torque about the axis that rights the car (up × worldUp).
-      const axis = new CANNON.Vec3(up.z, 0, -up.x); // up × (0,1,0)
+
+    if (tilt > 0.1) {
+      const axis = new CANNON.Vec3(up.z, 0, -up.x); // up × worldUp
       const len = axis.length();
       if (len > 1e-4) {
         axis.scale(1 / len, axis);
-        const strength = Math.min(1, (tilt - 0.12) * 3) * 26 * dt;
+        const strength = Math.min(1, (tilt - 0.1) * 2.5) * 34 * dt;
         this.body.angularVelocity.x += axis.x * strength;
         this.body.angularVelocity.z += axis.z * strength;
       }
+    }
+
+    // Hard cap: past ~0.6 rad, slerp the orientation toward pure-yaw upright so
+    // a flip is physically impossible.
+    if (tilt > 0.6) {
+      const fwd = new CANNON.Vec3(1, 0, 0);
+      this.body.quaternion.vmult(fwd, fwd);
+      const yaw = Math.atan2(-fwd.z, fwd.x); // our forward = (cosθ,0,-sinθ)
+      const upright = new CANNON.Quaternion();
+      upright.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), yaw);
+      this.body.quaternion.slerp(upright, Math.min(1, dt * 8), this.body.quaternion);
+      this.body.angularVelocity.x *= 0.3;
+      this.body.angularVelocity.z *= 0.3;
     }
   }
 

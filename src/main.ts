@@ -345,7 +345,10 @@ function startParking(sel: MenuSelection) {
 
     // Keyboard stays natural (W forward / S reverse); touch uses the gear pedal.
     const localInput = touch ? combineInputs(input.read(), touch.read()) : input.read();
-    parking.update(dt, localInput);
+    // Success is checked only when the player shifts to P (touch) or holds the
+    // brake to a stop (keyboard).
+    const parkEngaged = touch ? touch.gear === 'P' : localInput.brake;
+    parking.update(dt, localInput, parkEngaged);
 
     // Three selectable views (ANSICHT button): a close overhead, a wider
     // overhead, and a low chase behind the car.

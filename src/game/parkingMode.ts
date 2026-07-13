@@ -109,7 +109,6 @@ export class ParkingMode {
   time = 0;
   private def: ScenarioDef;
   private callbacks: ParkingCallbacks;
-  private settleTimer = 0;
   private lastHitAt = -10;
 
   /** World position of the target bay — used to frame the camera on car + goal. */
@@ -240,7 +239,11 @@ export class ParkingMode {
     });
   }
 
-  update(dt: number, input: CarInput) {
+  /** True on the frame the player is holding the car parked correctly but in the
+   * wrong spot — the loop can flash feedback. */
+  wrongSpot = false;
+
+  update(dt: number, input: CarInput, parkEngaged = false) {
     this.particles.update(dt);
     if (this.phase !== 'driving') return;
     this.time += dt;
@@ -256,12 +259,21 @@ export class ParkingMode {
     this.player.body.velocity.z *= damp;
 
     this.physics.step(dt);
-    this.checkSuccess(dt);
+    this.checkSuccess(parkEngaged);
 
-    this.callbacks.onHud?.({ hits: this.hits, maxHits: MAX_HITS, time: this.time, hint: this.def.hint });
+    const hint = this.wrongSpot ? 'Noch nicht in der Lücke!' : this.def.hint;
+    this.callbacks.onHud?.({ hits: this.hits, maxHits: MAX_HITS, time: this.time, hint });
   }
 
-  private checkSuccess(dt: number) {
+  /**
+   * Success is only evaluated when the player shifts to **P** (parkEngaged).
+   * If the car is correctly in the bay at that moment, the run ends immediately
+   * (which freezes the timer — no more counting up while "settling"). Shifting
+   * to P in the wrong place just flags wrongSpot for a hint and keeps going.
+   */
+  private checkSuccess(parkEngaged: boolean) {
+    this.wrongSpot = false;
+    if (!parkEngaged) return;
     const t = this.def.target;
     const p = this.player.body.position;
     // Into bay-local frame: u along bay depth (nose direction), v across.
@@ -280,17 +292,15 @@ export class ParkingMode {
     if (!this.def.reversed) angleDiff = Math.min(angleDiff, Math.abs(normalizeAngle(heading - t.angle - Math.PI)));
 
     const speed = Math.hypot(this.player.body.velocity.x, this.player.body.velocity.z);
-    const inside = Math.abs(u) < (BAY_D - 4.6) / 2 + 0.55 && Math.abs(v) < (BAY_W - 1.78) / 2 + 0.35;
-    const aligned = angleDiff < 0.22;
+    // A touch roomier than before so it's not pixel-perfect frustrating.
+    const inside = Math.abs(u) < (BAY_D - 4.6) / 2 + 0.7 && Math.abs(v) < (BAY_W - 1.78) / 2 + 0.45;
+    const aligned = angleDiff < 0.3;
 
-    if (inside && aligned && speed < 0.4) {
-      this.settleTimer += dt;
-      if (this.settleTimer > 0.9) {
-        this.phase = 'success';
-        this.callbacks.onPhaseChange?.('success');
-      }
+    if (inside && aligned && speed < 1.2) {
+      this.phase = 'success';
+      this.callbacks.onPhaseChange?.('success');
     } else {
-      this.settleTimer = 0;
+      this.wrongSpot = true; // in P but not correctly parked
     }
   }
 }

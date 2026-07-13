@@ -48,20 +48,23 @@ export class MainMenu {
         <button class="mode-btn" data-val="derby">DERBY</button>
         <button class="mode-btn" data-val="parking">PARKEN</button>
       </div>
-      <div class="mode-toggle" data-group="car">
-        ${CAR_CHOICES.map((c, i) => `<button class="mode-btn ${i === 0 ? 'active' : ''}" data-val="${c.id}">${c.label}</button>`).join('')}
-      </div>
-      <div class="mode-toggle" data-group="track" data-race-only>
-        ${Object.values(TRACKS).map((t, i) => `<button class="mode-btn ${i === 0 ? 'active' : ''}" data-val="${t.id}">${t.name}</button>`).join('')}
-      </div>
-      <div class="mode-toggle" data-group="opponent" data-race-derby-only>
-        <button class="mode-btn active" data-val="bot">GEGEN BOTS</button>
-        <button class="mode-btn" data-val="player">2 SPIELER</button>
-      </div>
-      <div class="mode-toggle" data-group="scenario" data-parking-only style="display:none">
-        <button class="mode-btn active" data-val="vorwaerts">VORWÄRTS</button>
-        <button class="mode-btn" data-val="rueckwaerts">RÜCKWÄRTS</button>
-        <button class="mode-btn" data-val="seitwaerts">SEITWÄRTS</button>
+      <button class="menu-btn menu-btn-ghost" data-action="extra-toggle">Auto &amp; Strecke ▾</button>
+      <div class="menu-extra" data-extra style="display:none">
+        <div class="mode-toggle" data-group="car">
+          ${CAR_CHOICES.map((c, i) => `<button class="mode-btn ${i === 0 ? 'active' : ''}" data-val="${c.id}">${c.label}</button>`).join('')}
+        </div>
+        <div class="mode-toggle" data-group="track" data-race-only>
+          ${Object.values(TRACKS).map((t, i) => `<button class="mode-btn ${i === 0 ? 'active' : ''}" data-val="${t.id}">${t.name}</button>`).join('')}
+        </div>
+        <div class="mode-toggle" data-group="opponent" data-race-derby-only>
+          <button class="mode-btn active" data-val="bot">GEGEN BOTS</button>
+          <button class="mode-btn" data-val="player">2 SPIELER</button>
+        </div>
+        <div class="mode-toggle" data-group="scenario" data-parking-only style="display:none">
+          <button class="mode-btn active" data-val="vorwaerts">VORWÄRTS</button>
+          <button class="mode-btn" data-val="rueckwaerts">RÜCKWÄRTS</button>
+          <button class="mode-btn" data-val="seitwaerts">SEITWÄRTS</button>
+        </div>
       </div>
       <div class="menu-buttons">
         <button class="menu-btn" data-action="local">START</button>
@@ -108,6 +111,15 @@ export class MainMenu {
       const open = onlinePanel.style.display === 'none';
       onlinePanel.style.display = open ? 'flex' : 'none';
       onlineToggle.textContent = open ? 'Online mit Freund ▴' : 'Online mit Freund ▾';
+    });
+
+    // Car/track/opponent options are collapsed by default so the menu opens clean.
+    const extraPanel = this.root.querySelector('[data-extra]') as HTMLElement;
+    const extraToggle = this.root.querySelector('[data-action="extra-toggle"]') as HTMLButtonElement;
+    extraToggle.addEventListener('click', () => {
+      const open = extraPanel.style.display === 'none';
+      extraPanel.style.display = open ? 'flex' : 'none';
+      extraToggle.textContent = open ? 'Auto & Strecke ▴' : 'Auto & Strecke ▾';
     });
 
     this.root.querySelector('[data-action="local"]')!.addEventListener('click', () => callbacks.onLocal({ ...this.sel }));
