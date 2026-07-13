@@ -18,7 +18,7 @@ export const DEFAULT_CAR_CONFIG: CarPhysicsConfig = {
   maxSpeed: 18,
   linearDamping: 0.26,
   angularDamping: 0.88,
-  driftGrip: 0.4,
+  driftGrip: 0.55,
 };
 
 export function createCarBody(dims: CarDimensions, material: CANNON.Material, position: CANNON.Vec3): CANNON.Body {
@@ -94,30 +94,37 @@ export function applyCarControl(
   }
 
   // --- Lateral grip (reduces side-slip; lower during drifts) ---
+  // Threshold 0.3 rad: everyday cornering keeps full grip; only a deliberate
+  // hard flick breaks into a drift. Lower values made casual turns slide out.
   const slipAngle = computeSlipAngle(body);
-  const isDrifting = slipAngle > 0.22;
+  const isDrifting = slipAngle > 0.3;
   const lateralGrip = isDrifting ? config.driftGrip : 0.85;
   body.velocity.x -= right.x * velLateral * lateralGrip * dt * 12;
   body.velocity.z -= right.z * velLateral * lateralGrip * dt * 12;
 
   // --- Steering (target yaw-rate model) ---
-  // The old model *accumulated* angular velocity every frame and clamped it,
-  // which felt twitchy and hard to hold a line — a tap kept rotating the car.
-  // Instead we pick a target yaw rate from the steer input and ease the car's
-  // actual yaw toward it. Holding steer turns exactly as hard as the input;
-  // releasing it snaps the target to 0 so the car straightens itself. This is
-  // the standard forgiving arcade-racer feel.
+  // Target-yaw model: the car's yaw rate eases toward a target set by the input;
+  // releasing the stick snaps the target to 0 so the car straightens itself.
+  //
+  // SIGN: rotating about +Y maps +X toward −Z, i.e. positive angular velocity
+  // turns the car LEFT in our atan2(z, x) heading convention. Steer input is
+  // +1 = right (keyboard 'D', right arrow button, and the AI's `desired − current`
+  // angle error all assume positive steer increases the heading angle), so the
+  // target yaw rate must be NEGATED. Without this the controls are mirrored.
   const speedFactor = Math.min(1, Math.abs(velForward) / 2.5); // can't pivot when nearly stopped
-  const steerAuthority = 1 - speedRatio * 0.3; // slightly calmer at top speed for stability
-  const direction = velForward < 0 ? -1 : 1; // steering inverts in reverse, like a real car
-  const driftBonus = isDrifting ? 1.25 : 1.0;
+  // Ease off with speed — full lock at top speed is how spins start.
+  const steerAuthority = 1 - speedRatio * 0.45;
+  // Reverse flips steering like a real car; the small dead-band keeps a wall
+  // bounce (brief negative velForward) from flipping the direction mid-corner.
+  const direction = velForward < -0.4 ? -1 : 1;
+  const driftBonus = isDrifting ? 1.1 : 1.0;
   const targetYaw =
-    input.steer * config.turnRate * handlingMultiplier * steerAuthority * driftBonus * direction * speedFactor;
+    -input.steer * config.turnRate * handlingMultiplier * steerAuthority * driftBonus * direction * speedFactor;
   // Ease in quickly when steering, straighten a touch more gently when centered.
   const yawResponse = input.steer !== 0 ? 9 : 6;
   body.angularVelocity.y += (targetYaw - body.angularVelocity.y) * Math.min(1, dt * yawResponse);
 
-  const maxAngular = 3.4 * handlingMultiplier;
+  const maxAngular = 2.7 * handlingMultiplier;
   if (body.angularVelocity.y > maxAngular) body.angularVelocity.y = maxAngular;
   if (body.angularVelocity.y < -maxAngular) body.angularVelocity.y = -maxAngular;
 

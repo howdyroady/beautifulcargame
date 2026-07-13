@@ -252,6 +252,15 @@ async function startArcadeRace(sel: MenuSelection) {
     if (humanCount === 1) {
       const h = headingOf(race.cars[0]);
       const p = race.cars[0].body.position;
+      // Dev-only telemetry for automated steering/heading tests.
+      if (import.meta.env.DEV) {
+        (window as unknown as { __dbg?: object }).__dbg = {
+          heading: Math.atan2(h.z, h.x),
+          speed: playerSpeed,
+          x: p.x,
+          z: p.z,
+        };
+      }
       updateChaseCamera(rig.camera, {
         x: p.x,
         z: p.z,

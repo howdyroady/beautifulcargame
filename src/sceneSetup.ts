@@ -268,9 +268,13 @@ export function createSceneRig(container: HTMLElement): SceneRig {
       camera.updateProjectionMatrix();
     }
 
-    // Camera tilt (roll)
+    // Camera tilt (roll). NEVER assign camera.rotation.z directly: lookAt() can
+    // decompose to euler angles with z ≈ ±π once the view direction passes ±90°
+    // yaw, and overwriting that component flips the whole camera — the screen
+    // suddenly "rotated 360°" mid-corner. rotateZ() applies a pure roll around
+    // the view axis on top of whatever lookAt set, which is what we mean.
     currentTilt += (targetTilt - currentTilt) * 0.06;
-    camera.rotation.z = currentTilt;
+    if (Math.abs(currentTilt) > 0.0005) camera.rotateZ(currentTilt);
 
     // Camera shake
     if (shakeDecayTimer > 0) {

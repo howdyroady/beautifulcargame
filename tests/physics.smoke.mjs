@@ -63,5 +63,30 @@ if (spread > 0.1) {
   failed = true;
 }
 
+// --- Steering sign: steer +1 must turn RIGHT (increase the atan2(z,x) heading) ---
+// The AI controllers compute steer from `desiredAngle − currentAngle` in that
+// convention, and keyboard/touch map right to +1. A flipped sign mirrors every
+// control in the game (this regression shipped once).
+body.position.set(0, dims.height / 2 + 0.01, 0);
+body.velocity.set(0, 0, 0);
+body.angularVelocity.set(0, 0, 0);
+body.quaternion.set(0, 0, 0, 1);
+const steerInput = { throttle: 1, steer: 1, brake: false, nitro: false };
+let t2 = 0;
+while (t2 < 0.7) {
+  // 0.7 s: long enough to build clear yaw, short enough not to wrap past ±π.
+  applyCarControl(body, steerInput, 1 / 60, DEFAULT_CAR_CONFIG, 1, 1);
+  pw.step(1 / 60);
+  t2 += 1 / 60;
+}
+const fwd = new CANNON.Vec3(1, 0, 0);
+body.quaternion.vmult(fwd, fwd);
+const heading = Math.atan2(fwd.z, fwd.x);
+console.log(`steer=+1 for 0.7s → heading=${heading.toFixed(2)} rad, yawVel=${body.angularVelocity.y.toFixed(2)}`);
+if (heading < 0.1 || heading > Math.PI - 0.2) {
+  console.error('FAIL: steer +1 did not turn the car right (heading should be clearly positive).');
+  failed = true;
+}
+
 if (failed) process.exit(1);
-console.log('OK: car accelerates to max speed, frame-rate independent.');
+console.log('OK: car accelerates to max speed, frame-rate independent, steering sign correct.');

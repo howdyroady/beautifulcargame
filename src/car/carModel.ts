@@ -166,7 +166,10 @@ export function createCarModel(paintColor = 0x9199a1): CarModel {
   const group = new THREE.Group();
   const halfL = length / 2;
   const bodyH = height * 0.8;
-  const rideY = wheelRadius * 1.0;
+  // Underbody clearance: profile y=0 sits this far above the ground.
+  const bodyLift = 0.12;
+  /** Profile-fraction → world height. */
+  const py = (f: number) => f * bodyH + bodyLift;
 
   const paintMat = new THREE.MeshPhysicalMaterial({
     color: paintColor,
@@ -192,83 +195,101 @@ export function createCarModel(paintColor = 0x9199a1): CarModel {
     clearcoat: 0.6,
   });
 
-  // Dense smooth coupe silhouette
+  // Coupe side profile (rear → roof → nose). Profile x IS the car's length axis
+  // (world X, +X = nose) and the shape is extruded along Z across the car's
+  // width — no rotation involved. The previous version rotated the extrusion
+  // 90°, which laid the 4.6 m silhouette ACROSS the driving direction: the car
+  // rendered as a dome ~4.6 m wide and ~1.8 m long over correctly-placed wheels.
   const bodyPts: [number, number][] = [
-    [-1.0, 0.05], [-1.0, 0.18], [-0.99, 0.28], [-0.97, 0.36], [-0.94, 0.43], [-0.89, 0.5],
-    [-0.83, 0.56], [-0.76, 0.62], [-0.69, 0.68], [-0.62, 0.74], [-0.55, 0.8], [-0.47, 0.86],
-    [-0.38, 0.91], [-0.28, 0.95], [-0.18, 0.98], [-0.06, 1.0],
-    [0.06, 1.0], [0.16, 0.98], [0.26, 0.94], [0.34, 0.88], [0.41, 0.8],
-    [0.47, 0.72], [0.52, 0.63], [0.57, 0.55], [0.63, 0.48], [0.7, 0.43],
-    [0.78, 0.39], [0.86, 0.36], [0.93, 0.33], [1.0, 0.3], [1.0, 0.05],
+    [-1.0, 0.07],            // bottom rear
+    [-1.0, 0.34],            // tail face
+    [-0.96, 0.44],           // ducktail lip
+    [-0.86, 0.46],           // decklid
+    [-0.64, 0.48],           // decklid end
+    [-0.56, 0.53],           // C-pillar base
+    [-0.42, 0.72],           // rear glass slope
+    [-0.28, 0.88],           // C-pillar top
+    [-0.15, 0.96],           // roof rear
+    [-0.02, 1.0],            // roof crown (over the cabin)
+    [0.1, 0.96],             // windshield top
+    [0.24, 0.72],            // windshield
+    [0.32, 0.6],             // cowl
+    [0.46, 0.56],            // hood rear
+    [0.74, 0.5],             // hood
+    [0.9, 0.46],             // nose top
+    [1.0, 0.42],             // nose lip
+    [1.0, 0.07],             // bottom front
   ];
+  // Bevel adds bevelSize on every side, so shrink the extrusion depth to keep
+  // the finished body exactly `width` wide.
+  const bevel = 0.06;
+  const bodyDepth = width - 2 * bevel;
   const bodyGeoRaw = new THREE.ExtrudeGeometry(shapeFrom(bodyPts, halfL, bodyH), {
-    depth: width,
+    depth: bodyDepth,
     bevelEnabled: true,
-    bevelThickness: 0.06,
-    bevelSize: 0.06,
+    bevelThickness: bevel,
+    bevelSize: bevel,
     bevelSegments: 6,
     curveSegments: 1,
   });
-  taperAboveBelt(bodyGeoRaw, bodyH * 0.5, bodyH, width, 0.26);
+  // Tumblehome: pinch everything above the beltline inward for a cabin that is
+  // visibly narrower than the fenders.
+  taperAboveBelt(bodyGeoRaw, bodyH * 0.5, bodyH, bodyDepth, 0.34);
   const bodyGeo = mergeVertices(bodyGeoRaw);
   bodyGeo.computeVertexNormals();
-  bodyGeo.center();
+  bodyGeo.translate(0, 0, -bodyDepth / 2); // center across the width
   const body = new THREE.Mesh(bodyGeo, paintMat);
-  body.rotation.y = Math.PI / 2;
-  body.position.y = rideY;
+  body.position.y = bodyLift;
   group.add(body);
 
-  // Greenhouse glass
+  // Greenhouse glass band, following the roofline just inside the body skin.
   const glassPts: [number, number][] = [
-    [-0.51, 0.55], [-0.45, 0.67], [-0.37, 0.77], [-0.27, 0.85], [-0.15, 0.91],
-    [-0.02, 0.95], [0.1, 0.94], [0.2, 0.89], [0.3, 0.8], [0.37, 0.69],
-    [0.41, 0.57], [0.35, 0.54], [-0.45, 0.54],
+    [-0.52, 0.52],
+    [-0.4, 0.7], [-0.27, 0.85], [-0.14, 0.93], [-0.02, 0.965],
+    [0.09, 0.93], [0.22, 0.7], [0.27, 0.55],
   ];
+  const glassDepth = width * 0.8;
   const glassGeoRaw = new THREE.ExtrudeGeometry(shapeFrom(glassPts, halfL, bodyH), {
-    depth: width * 0.88,
+    depth: glassDepth,
     bevelEnabled: false,
     curveSegments: 1,
   });
-  taperAboveBelt(glassGeoRaw, bodyH * 0.48, bodyH, width * 0.88, 0.24);
+  taperAboveBelt(glassGeoRaw, bodyH * 0.5, bodyH, glassDepth, 0.3);
   const glassGeo = mergeVertices(glassGeoRaw);
   glassGeo.computeVertexNormals();
-  glassGeo.center();
+  glassGeo.translate(0, 0, -glassDepth / 2);
   const glass = new THREE.Mesh(glassGeo, glassMat);
-  glass.rotation.y = Math.PI / 2;
-  glass.position.set(0.001, rideY + 0.015, 0);
+  glass.position.y = bodyLift + 0.01;
   group.add(glass);
 
   // Hood power domes
   for (const side of [-1, 1]) {
-    const dome = new THREE.Mesh(new THREE.CapsuleGeometry(0.048, 0.8, 4, 8), paintMat);
+    const dome = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.7, 4, 8), paintMat);
     dome.rotation.z = Math.PI / 2;
     dome.rotation.y = 0.06 * side;
-    dome.position.set(halfL * 0.5, rideY + bodyH * 0.41, side * width * 0.16);
+    dome.position.set(halfL * 0.58, py(0.54), side * width * 0.15);
     group.add(dome);
   }
 
-  // Front grille
+  // Front grille (on the nose face, which sits at x ≈ halfL + bevel)
   const grille = new THREE.Mesh(
-    new THREE.PlaneGeometry(width * 0.54, height * 0.32),
+    new THREE.PlaneGeometry(width * 0.5, height * 0.2),
     new THREE.MeshStandardMaterial({ map: buildGrilleTexture(), roughness: 0.25, metalness: 0.85 }),
   );
-  grille.position.set(halfL - 0.012, rideY + height * 0.2, 0);
-  grille.rotation.y = -Math.PI / 2;
+  grille.position.set(halfL + bevel + 0.005, py(0.27), 0);
+  grille.rotation.y = Math.PI / 2;
   group.add(grille);
 
   const intake = new THREE.Mesh(
-    new THREE.BoxGeometry(0.06, height * 0.15, width * 0.62),
+    new THREE.BoxGeometry(0.08, height * 0.11, width * 0.56),
     new THREE.MeshStandardMaterial({ color: 0x040406, roughness: 0.7 }),
   );
-  intake.position.set(halfL - 0.02, rideY - height * 0.02, 0);
+  intake.position.set(halfL + 0.02, py(0.12), 0);
   group.add(intake);
 
-  const splitter = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, width * 1.04), blackTrimMat);
-  splitter.position.set(halfL - 0.04, rideY * 0.44, 0);
+  const splitter = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, width * 0.98), blackTrimMat);
+  splitter.position.set(halfL - 0.02, py(0.035), 0);
   group.add(splitter);
-  const splitterChrome = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.016, width * 1.04), chromeMat);
-  splitterChrome.position.set(halfL - 0.03, rideY * 0.29, 0);
-  group.add(splitterChrome);
 
   // Lights, tails, side details, exhaust
   const headlightMat = new THREE.MeshPhysicalMaterial({
@@ -312,31 +333,31 @@ export function createCarModel(paintColor = 0x9199a1): CarModel {
   });
 
   for (const side of [-1, 1]) {
-    const headlight = new THREE.Mesh(new THREE.BoxGeometry(0.1, height * 0.1, width * 0.25), headlightMat);
-    headlight.position.set(halfL - 0.09, rideY + height * 0.21, side * width * 0.32);
-    headlight.rotation.y = side * 0.12;
+    const headlight = new THREE.Mesh(new THREE.BoxGeometry(0.12, height * 0.09, width * 0.22), headlightMat);
+    headlight.position.set(halfL - 0.02, py(0.36), side * width * 0.3);
+    headlight.rotation.y = side * 0.1;
     group.add(headlight);
 
-    const drl = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, width * 0.25), ledMat);
-    drl.position.set(halfL - 0.12, rideY + height * 0.185, side * width * 0.34);
-    drl.rotation.y = side * 0.15;
+    const drl = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, width * 0.22), ledMat);
+    drl.position.set(halfL + 0.02, py(0.315), side * width * 0.31);
+    drl.rotation.y = side * 0.12;
     group.add(drl);
 
     const sideIntake = new THREE.Mesh(
-      new THREE.BoxGeometry(0.18, height * 0.12, width * 0.16),
+      new THREE.BoxGeometry(0.18, height * 0.1, width * 0.14),
       new THREE.MeshStandardMaterial({ color: 0x040406, roughness: 0.75 }),
     );
-    sideIntake.position.set(halfL - 0.1, rideY * 0.84, side * width * 0.41);
+    sideIntake.position.set(halfL - 0.16, py(0.15), side * width * 0.36);
     group.add(sideIntake);
 
-    const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.09, 0.09), paintMat);
-    mirror.position.set(halfL * 0.2, rideY + height * 0.58, side * (width / 2 + 0.06));
+    const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.09), paintMat);
+    mirror.position.set(halfL * 0.24, py(0.62), side * (width / 2 + 0.05));
     group.add(mirror);
 
-    // Tail lights
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.15, height * 0.14, width * 0.29), tailOffMat);
-    tail.position.set(-halfL + 0.12, rideY + height * 0.3, side * width * 0.3);
-    tail.rotation.y = -side * 0.12;
+    // Tail lights (on the tail face)
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.1, height * 0.11, width * 0.26), tailOffMat);
+    tail.position.set(-halfL - 0.02, py(0.24), side * width * 0.28);
+    tail.rotation.y = -side * 0.1;
     group.add(tail);
     brakeLightMeshes.push(tail);
 
@@ -344,34 +365,35 @@ export function createCarModel(paintColor = 0x9199a1): CarModel {
     for (const inner of [0, 1]) {
       const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.058, 0.14, 16), chromeMat);
       tip.rotation.z = Math.PI / 2;
-      tip.position.set(-halfL + 0.02, rideY * 0.58, side * width * (0.3 + inner * 0.11));
+      tip.position.set(-halfL - 0.05, py(0.09), side * width * (0.26 + inner * 0.11));
       group.add(tip);
 
       // Nitro glow inside exhaust tip
       const glow = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.06, 12), nitroOffMat);
       glow.rotation.z = Math.PI / 2;
-      glow.position.set(-halfL + 0.01, rideY * 0.58, side * width * (0.3 + inner * 0.11));
+      glow.position.set(-halfL - 0.07, py(0.09), side * width * (0.26 + inner * 0.11));
       group.add(glow);
       nitroGlowMeshes.push(glow);
     }
   }
 
-  // Rear diffuser + spoiler
-  const diffuser = new THREE.Mesh(new THREE.BoxGeometry(0.2, height * 0.15, width * 0.88), blackTrimMat);
-  diffuser.position.set(-halfL + 0.08, rideY * 0.54, 0);
+  // Rear diffuser + ducktail spoiler on the decklid
+  const diffuser = new THREE.Mesh(new THREE.BoxGeometry(0.2, height * 0.11, width * 0.8), blackTrimMat);
+  diffuser.position.set(-halfL + 0.04, py(0.05), 0);
   group.add(diffuser);
-  const spoiler = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.035, width * 0.74), paintMat);
-  spoiler.position.set(-halfL + 0.22, rideY + bodyH * 0.99, 0);
+  const spoiler = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.045, width * 0.58), paintMat);
+  spoiler.position.set(-halfL * 0.93, py(0.475), 0);
   group.add(spoiler);
 
-  // Side skirts
-  const skirt = new THREE.Mesh(new THREE.BoxGeometry(length * 0.56, rideY * 0.88, width * 0.99), blackTrimMat);
-  skirt.position.set(0, rideY * 0.51, 0);
+  // Side skirts: a slim rocker strip between the wheels, tucked under the body —
+  // NOT a full-width slab (that read as extra body width from any angle).
+  const skirt = new THREE.Mesh(new THREE.BoxGeometry(length * 0.5, 0.1, width * 0.88), blackTrimMat);
+  skirt.position.set(0, 0.1, 0);
   group.add(skirt);
 
   // Underbody LED glow (cyan)
   const underGlow = new THREE.Mesh(
-    new THREE.PlaneGeometry(length * 0.7, width * 0.8),
+    new THREE.PlaneGeometry(length * 0.62, width * 0.64),
     new THREE.MeshStandardMaterial({
       color: 0x20c0ff,
       emissive: 0x1090cc,
@@ -396,8 +418,10 @@ export function createCarModel(paintColor = 0x9199a1): CarModel {
   sgrad.addColorStop(1, 'rgba(0,0,0,0)');
   sctx.fillStyle = sgrad;
   sctx.fillRect(0, 0, 64, 64);
+  // Keep the shadow halo close to the footprint — an oversized blob makes the
+  // whole car read wider than it is, especially from the top-down parking cam.
   const contactShadow = new THREE.Mesh(
-    new THREE.PlaneGeometry(length * 1.2, width * 1.6),
+    new THREE.PlaneGeometry(length * 1.08, width * 1.25),
     new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false }),
   );
   contactShadow.rotation.x = -Math.PI / 2;
