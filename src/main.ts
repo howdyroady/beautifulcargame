@@ -77,6 +77,21 @@ function clearScene() {
   }
 }
 
+/**
+ * Touch driving model for race modes: the car auto-accelerates (arrows only
+ * steer), and the BREMSE button brakes at speed but *reverses* once the car is
+ * nearly stopped — so hitting a wall no longer leaves you helplessly pinned.
+ */
+function applyTouchDriveModel(input: CarInput, car: CarEntity): CarInput {
+  if (input.brake) {
+    const speed = Math.hypot(car.body.velocity.x, car.body.velocity.z);
+    if (speed < 3) return { ...input, throttle: -0.75, brake: false }; // back out of the wall
+    return input; // still moving: brake normally
+  }
+  if (input.throttle === 0) return { ...input, throttle: 1 }; // auto-gas
+  return input;
+}
+
 /** Forward direction of a car's physics body projected onto the ground plane. */
 function headingOf(car: CarEntity): { x: number; z: number } {
   const f = new THREE.Vector3(1, 0, 0).applyQuaternion(
@@ -91,6 +106,8 @@ function showMenu() {
   clearScene();
   setPlaying(false);
   rig.setBoostFov(false);
+  engineSound.setEnabled(false); // no engine drone behind the menu
+  engineSound.setScreech(false);
 
   // 3D showroom behind the (translucent) menu: the currently selected car rotating on a plinth.
   const stage = new THREE.Group();
@@ -169,6 +186,7 @@ function showMenu() {
 async function startArcadeRace(sel: MenuSelection) {
   stopLoop(); // the menu showroom loop is still ticking
   clearScene();
+  engineSound.setEnabled(true);
   const humanCount = sel.vsBot ? 1 : 2;
   // Desktops handle a fuller grid; phones stay at 4 cars for fps headroom.
   const aiCount = sel.vsBot ? (isTouchDevice() ? 3 : 5) : 2;
@@ -231,9 +249,7 @@ async function startArcadeRace(sel: MenuSelection) {
     }
 
     let localA = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
-    // Asphalt-style auto-throttle on touch: the car always drives, the arrows steer.
-    // The manual layouts (parking/derby) still send explicit gas/reverse instead.
-    if (touch && localA.throttle === 0 && !localA.brake) localA = { ...localA, throttle: 1 };
+    if (touch) localA = applyTouchDriveModel(localA, race.cars[0]);
     const inputs = inputB ? [localA, inputB.read()] : [localA];
     race.update(dt, inputs);
 
@@ -284,6 +300,7 @@ function startParking(sel: MenuSelection) {
   clearScene();
   rig.setCameraTilt(0); // clear any leftover roll from a previous race
   rig.setBoostFov(false);
+  engineSound.setEnabled(false); // parking is quiet: only gear clicks, no engine drone
   const hud = new ParkingHud(app, {
     onRetry: () => {
       hud.destroy();
@@ -304,7 +321,7 @@ function startParking(sel: MenuSelection) {
   });
 
   const input = new KeyboardInputSource('wasd');
-  const touch = isTouchDevice() ? new TouchControls(app, 'manual') : null;
+  const touch = isTouchDevice() ? new TouchControls(app, 'parking') : null;
 
   let last = performance.now();
   function loop(now: number) {
@@ -317,9 +334,9 @@ function startParking(sel: MenuSelection) {
       return;
     }
 
+    // Keyboard stays natural (W forward / S reverse); touch uses the gear pedal.
     const localInput = touch ? combineInputs(input.read(), touch.read()) : input.read();
     parking.update(dt, localInput);
-    engineSound.update(dt, parking.player.speedKmh, Math.abs(localInput.throttle) * 0.6, false);
 
     // Frame the car AND the target bay together, so you can always see where you're
     // going and the cars you must avoid. Pull higher the further apart they are.
@@ -343,6 +360,7 @@ function startParking(sel: MenuSelection) {
 function startLocalDerby(sel: MenuSelection) {
   stopLoop(); // the menu showroom loop is still ticking
   clearScene();
+  engineSound.setEnabled(true);
   const cleanup = () => {
     hud.destroy();
     touch?.destroy();
@@ -430,6 +448,7 @@ function startHost(sel: MenuSelection) {
     onConnected: () => {
       lobby.destroy();
       clearScene();
+      engineSound.setEnabled(true);
       const inputA = new KeyboardInputSource('wasd');
       const touch = isTouchDevice() ? new TouchControls(app, sel.mode === 'race' ? 'race' : 'manual') : null;
       let sendAccumulator = 0;
@@ -463,7 +482,7 @@ function startHost(sel: MenuSelection) {
           const dt = Math.min(0.05, (now - last) / 1000);
           last = now;
           let localA = touch ? combineInputs(inputA.read(), touch.read()) : inputA.read();
-          if (touch && localA.throttle === 0 && !localA.brake) localA = { ...localA, throttle: 1 };
+          if (touch) localA = applyTouchDriveModel(localA, race.cars[0]);
           race.update(dt, [localA, remoteInput]);
           engineSound.update(dt, race.cars[0].speedKmh, Math.abs(localA.throttle), race.racers[0].nitroActive);
           engineSound.setScreech(Math.abs(localA.steer) > 0.6 && race.cars[0].speedKmh > 30);
@@ -550,6 +569,7 @@ function startJoin(code: string, sel: MenuSelection) {
     onConnected: () => {
       lobby.destroy();
       clearScene();
+      engineSound.setEnabled(true);
       const input = new KeyboardInputSource('wasd');
       const touch = isTouchDevice() ? new TouchControls(app, sel.mode === 'race' ? 'race' : 'manual') : null;
       let sendAccumulator = 0;

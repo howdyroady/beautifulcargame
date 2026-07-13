@@ -4,6 +4,7 @@ export interface PhysicsWorld {
   world: CANNON.World;
   groundMaterial: CANNON.Material;
   carMaterial: CANNON.Material;
+  wallMaterial: CANNON.Material;
   step: (dt: number) => void;
 }
 
@@ -18,6 +19,7 @@ export function createPhysicsWorld(): PhysicsWorld {
 
   const groundMaterial = new CANNON.Material('ground');
   const carMaterial = new CANNON.Material('car');
+  const wallMaterial = new CANNON.Material('wall');
 
   // Near-zero contact friction on purpose: cannon builds one friction equation
   // per contact point (a resting box has 4), so even a modest coefficient adds
@@ -36,6 +38,15 @@ export function createPhysicsWorld(): PhysicsWorld {
     restitution: 0.35,
   });
   world.addContactMaterial(carCar);
+
+  // Walls: frictionless so the car slides ALONG a barrier instead of catching
+  // and stopping dead (the default 0.3 friction was pinning cars to the rails),
+  // with a little restitution so a hit nudges the car back onto the track.
+  const carWall = new CANNON.ContactMaterial(wallMaterial, carMaterial, {
+    friction: 0.0,
+    restitution: 0.25,
+  });
+  world.addContactMaterial(carWall);
 
   let accumulator = 0;
   const step = (dt: number) => {
@@ -79,5 +90,5 @@ export function createPhysicsWorld(): PhysicsWorld {
     }
   };
 
-  return { world, groundMaterial, carMaterial, step };
+  return { world, groundMaterial, carMaterial, wallMaterial, step };
 }

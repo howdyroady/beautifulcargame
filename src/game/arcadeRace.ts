@@ -84,7 +84,7 @@ export class ArcadeRace {
     this.callbacks = callbacks;
     this.humanCount = opts.humanCount;
     this.config = TRACKS[opts.trackId] ?? TRACKS.city;
-    this.circuit = new Circuit(scene, this.physics.world, this.physics.groundMaterial, this.config);
+    this.circuit = new Circuit(scene, this.physics.world, this.physics.groundMaterial, this.config, this.physics.wallMaterial);
     this.particles = new ParticlePool(scene, 200);
 
     const total = opts.humanCount + opts.aiCount;

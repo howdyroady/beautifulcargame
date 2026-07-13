@@ -367,6 +367,39 @@ canvas {
   background: rgba(255, 170, 40, 0.6);
 }
 
+/* Parking: a gear column (R/D/P) next to a single big GAS pedal. */
+.touch-actions-parking {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 0.9rem;
+}
+.touch-actions-parking .touch-gas {
+  width: 6rem;
+  height: 6rem;
+  border-radius: 50%;
+  font-size: 0.85rem;
+}
+.touch-gears {
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+/* Higher specificity than `.touch-actions .touch-btn` so gears stay small
+   rounded-rects instead of inheriting the big round pedal shape. */
+.touch-actions-parking .touch-gear {
+  width: 3.2rem;
+  height: 2.8rem;
+  border-radius: 0.8rem;
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+}
+.touch-actions-parking .touch-gear.active {
+  background: rgba(64, 208, 255, 0.78);
+  border-color: rgba(120, 230, 255, 0.9);
+  color: #04121a;
+}
+
 .race-place {
   font-weight: 900;
   font-size: 1.4rem;
@@ -443,17 +476,24 @@ canvas {
   gap: 0.7rem;
 }
 
-/* Small always-visible pause button in the top-left of the race HUD. */
+/* Small pause button, pinned to the top-center of the screen — out of the way
+   of the position/lap info in the corners and of the thumbs at the bottom.
+   position:absolute means it doesn't matter where each HUD puts it in the DOM. */
 .hud-pause {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
   pointer-events: auto;
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 2.4rem;
+  height: 2.4rem;
   border-radius: 0.7rem;
-  background: rgba(20, 22, 30, 0.55);
-  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  background: rgba(20, 22, 30, 0.5);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
   color: #f2f2f4;
   font-weight: 900;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   letter-spacing: 0.12em;
   cursor: pointer;
   display: flex;

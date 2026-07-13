@@ -193,10 +193,18 @@ export class Circuit {
   boostPads: Pad[] = [];
   nitroPickups: NitroPickup[] = [];
   private scene: THREE.Scene;
+  private wallMaterial: CANNON.Material | null = null;
 
-  constructor(scene: THREE.Scene, world: CANNON.World | null, groundMaterial: CANNON.Material | null, config: TrackConfig) {
+  constructor(
+    scene: THREE.Scene,
+    world: CANNON.World | null,
+    groundMaterial: CANNON.Material | null,
+    config: TrackConfig,
+    wallMaterial: CANNON.Material | null = null,
+  ) {
     this.scene = scene;
     this.config = config;
+    this.wallMaterial = wallMaterial;
     this.curve = new THREE.CatmullRomCurve3(
       config.points.map(([x, z]) => new THREE.Vector3(x, 0, z)),
       true,
@@ -334,9 +342,12 @@ export class Circuit {
         idx++;
 
         if (world) {
-          const body = new CANNON.Body({ mass: 0 });
-          body.addShape(new CANNON.Box(new CANNON.Vec3(len / 2, WALL_HEIGHT / 2, 0.16)));
-          body.position.set(mid.x, WALL_HEIGHT / 2, mid.z);
+          const body = new CANNON.Body({ mass: 0, material: this.wallMaterial ?? undefined });
+          // Thick + tall collider: thin rails let a 200+ km/h car tunnel through
+          // in a single step (it ended up in the buildings). 0.6 m half-depth and
+          // a raised top stop both tunnelling and flying over.
+          body.addShape(new CANNON.Box(new CANNON.Vec3(len / 2, WALL_HEIGHT, 0.6)));
+          body.position.set(mid.x, WALL_HEIGHT, mid.z);
           body.quaternion.setFromEuler(0, -angle, 0);
           world.addBody(body);
         }

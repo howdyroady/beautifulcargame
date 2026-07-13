@@ -24,7 +24,10 @@ export class EngineSound {
   private windGain: GainNode | null = null;
   private windFilter: BiquadFilterNode | null = null;
   private rpm = 0;
-  private enabled = true;
+  // Starts muted: the oscillators run continuously once initialised (on the
+  // first tap, which is a menu button), so without this the menu droned. Only
+  // the driving modes call setEnabled(true).
+  private enabled = false;
 
   /** Must be called from a user-gesture handler. Safe to call repeatedly. */
   init() {
@@ -33,7 +36,7 @@ export class EngineSound {
     this.ctx = ctx;
 
     this.master = ctx.createGain();
-    this.master.gain.value = 0.16;
+    this.master.gain.value = this.enabled ? 0.16 : 0;
     this.master.connect(ctx.destination);
 
     const shaper = ctx.createWaveShaper();
@@ -202,6 +205,33 @@ export class EngineSound {
     src.connect(hp);
     hp.connect(g);
     g.connect(this.master);
+    src.start();
+  }
+
+  /**
+   * Short mechanical "clunk" for a gear change (parking R/D/P). Routes straight
+   * to the output, bypassing the (muted-in-parking) engine master so it's heard
+   * even when the continuous engine drone is disabled.
+   */
+  playGearClick() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    if (ctx.state === 'suspended') void ctx.resume();
+    const dur = 0.12;
+    const buffer = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / data.length, 3);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 180;
+    bp.Q.value = 1.2;
+    const g = ctx.createGain();
+    g.gain.value = 0.25;
+    src.connect(bp);
+    bp.connect(g);
+    g.connect(ctx.destination);
     src.start();
   }
 
