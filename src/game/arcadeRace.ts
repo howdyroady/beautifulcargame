@@ -6,6 +6,7 @@ import { CarEntity } from './carEntity';
 import { attachHeadlights } from '../car/carModel';
 import { ParticlePool } from '../effects/particles';
 import { deriveRacerInput, type RacerAIState } from '../ai/racerAI';
+import { Traffic } from './traffic';
 import type { CarInput } from '../input/input';
 import { NEUTRAL_INPUT } from '../input/input';
 import { engineSound } from '../audio/engineSound';
@@ -50,6 +51,8 @@ export interface ArcadeRaceOptions {
   aiCount: number;
   playerColor: number;
   playerModel?: import('../car/carModel').CarModel;
+  /** Slow "civilian" cars to weave through. Local single-player only. */
+  trafficCount?: number;
 }
 
 const AI_COLORS = [0xb03030, 0x2054c0, 0xd0a020, 0x30a060, 0x8030a0];
@@ -78,6 +81,7 @@ export class ArcadeRace {
   private nearMissCooldown = new Map<string, number>();
   private finishedOrder: number[] = [];
   private resultsSent = false;
+  private traffic: Traffic | null = null;
 
   constructor(scene: THREE.Scene, opts: ArcadeRaceOptions, callbacks: ArcadeRaceCallbacks = {}) {
     this.scene = scene;
@@ -134,6 +138,10 @@ export class ArcadeRace {
       if (i === 0) attachHeadlights(car.model);
     }
 
+    if (opts.trafficCount && opts.trafficCount > 0) {
+      this.traffic = new Traffic(scene, this.physics.world, this.circuit, this.physics.carMaterial, opts.trafficCount);
+    }
+
     this.callbacks.onPhaseChange?.(this.phase, { countdown: COUNTDOWN_SECONDS });
   }
 
@@ -180,6 +188,7 @@ export class ArcadeRace {
   update(dt: number, humanInputs: CarInput[]) {
     this.particles.update(dt);
     this.circuit.updatePickups(dt, this.raceTime);
+    this.traffic?.update(dt);
 
     if (this.phase === 'countdown') {
       this.countdownRemaining -= dt;

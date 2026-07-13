@@ -218,9 +218,12 @@ async function startArcadeRace(sel: MenuSelection) {
     },
   });
 
+  // Traffic only in local single-player (it's not in the netcode snapshot, and
+  // 2-player shares one screen). Fewer on phones for fps headroom.
+  const trafficCount = humanCount === 1 ? (isTouchDevice() ? 4 : 6) : 0;
   const race = new ArcadeRace(
     rig.scene,
-    { trackId: sel.trackId, humanCount: humanCount as 1 | 2, aiCount, playerColor: sel.carColor, playerModel },
+    { trackId: sel.trackId, humanCount: humanCount as 1 | 2, aiCount, playerColor: sel.carColor, playerModel, trafficCount },
     {
       onPhaseChange: (phase, data) => {
         if (phase === 'countdown') hud.setCountdown(data?.countdown ?? 0);
