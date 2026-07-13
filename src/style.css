@@ -81,6 +81,35 @@ canvas {
 
 .menu-title span {
   color: #ff4a3c;
+  background: linear-gradient(90deg, #ff4a3c 0%, #ff9a3c 40%, #ffd27a 50%, #ff9a3c 60%, #ff4a3c 100%);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: title-shimmer 3.5s linear infinite;
+}
+@keyframes title-shimmer {
+  to { background-position: 220% center; }
+}
+
+/* Staggered entrance so the options don't all slam in at once — they cascade. */
+.menu > * {
+  animation: menu-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.menu > *:nth-child(1) { animation-delay: 0.03s; }
+.menu > *:nth-child(2) { animation-delay: 0.09s; }
+.menu > *:nth-child(3) { animation-delay: 0.15s; }
+.menu > *:nth-child(4) { animation-delay: 0.21s; }
+.menu > *:nth-child(5) { animation-delay: 0.27s; }
+.menu > *:nth-child(6) { animation-delay: 0.33s; }
+.menu > *:nth-child(7) { animation-delay: 0.39s; }
+.menu > *:nth-child(8) { animation-delay: 0.45s; }
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu > *, .menu-title span { animation: none; }
 }
 
 .menu-sub {
@@ -109,11 +138,16 @@ canvas {
   font-size: clamp(0.75rem, 3.2vw, 1rem);
   white-space: nowrap;
   cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.12s ease;
+}
+.mode-btn:active {
+  transform: scale(0.94);
 }
 
 .mode-btn.active {
   background: #ff4a3c;
   color: white;
+  box-shadow: 0 0 14px rgba(255, 74, 60, 0.5);
 }
 
 .menu-buttons {
@@ -474,6 +508,30 @@ canvas {
   display: flex;
   align-items: center;
   gap: 0.7rem;
+}
+
+.arcade-topright {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+/* Perspective-cycle button (parking). */
+.hud-cambtn {
+  pointer-events: auto;
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.6rem;
+  background: rgba(20, 22, 30, 0.55);
+  border: 1.5px solid rgba(255, 255, 255, 0.22);
+  color: #f2f2f4;
+  font-weight: 800;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.hud-cambtn:hover {
+  background: rgba(40, 44, 56, 0.7);
 }
 
 /* Small pause button, pinned to the top-center of the screen — out of the way

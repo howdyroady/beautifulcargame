@@ -42,33 +42,53 @@ interface ScenarioDef {
 // NOSE points when parked nose-in. The bay row sits along z=-12 and is entered from the lot
 // (z > -12), so its nose-in direction is -z ⇒ θ = -π/2. The parallel strip runs along the right
 // wall with cars pointing +z ⇒ θ = +π/2. (CarEntity yaw is -θ; see spawn below.)
+const rand = (a: number, b: number) => a + Math.random() * (b - a);
+const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+/**
+ * Builds a scenario. The target bay and the approach are RANDOMISED each run so
+ * forward parking isn't always "drive straight into the one gap ahead": the free
+ * bay moves along the row and you spawn off to the side at an angle, so you have
+ * to steer in past the parked cars.
+ */
 function scenarioFor(kind: ParkingScenario): ScenarioDef {
   const bayX = (i: number) => -12 + i * (BAY_W + 0.6);
   const rowBays: BayPose[] = Array.from({ length: 8 }, (_, i) => ({ x: bayX(i), z: -12, angle: -Math.PI / 2 }));
+  // Every other interior bay is filled; the free one is chosen at random.
+  const rowFilled = (freeIdx: number) => rowBays.filter((_, i) => i >= 1 && i <= 6 && i !== freeIdx);
+
   switch (kind) {
-    case 'vorwaerts':
+    case 'vorwaerts': {
+      const ti = pick([2, 3, 4, 5]);
+      const side = Math.random() < 0.5 ? -1 : 1;
       return {
         hint: 'Fahre VORWÄRTS in die grüne Lücke',
-        target: rowBays[3],
-        spawn: { x: bayX(3), z: 5, angle: -Math.PI / 2 },
-        parked: [rowBays[1], rowBays[2], rowBays[4], rowBays[5], rowBays[6]],
+        target: rowBays[ti],
+        // Off to one side and angled, so you must turn into the bay.
+        spawn: { x: bayX(ti) + side * rand(3, 5.5), z: rand(5, 8), angle: -Math.PI / 2 + side * rand(0.35, 0.7) },
+        parked: rowFilled(ti),
         reversed: false,
       };
-    case 'rueckwaerts':
+    }
+    case 'rueckwaerts': {
+      const ti = pick([2, 3, 4, 5]);
+      const side = Math.random() < 0.5 ? -1 : 1;
       return {
         hint: 'Setze RÜCKWÄRTS in die grüne Lücke',
-        target: rowBays[4],
-        spawn: { x: bayX(4) - 5, z: 2, angle: 0 },
-        parked: [rowBays[2], rowBays[3], rowBays[5], rowBays[6]],
+        target: rowBays[ti],
+        spawn: { x: bayX(ti) + side * rand(4, 6), z: rand(1.5, 3.5), angle: side < 0 ? 0 : Math.PI },
+        parked: rowFilled(ti),
         reversed: true,
       };
+    }
     case 'seitwaerts': {
       const strip = (i: number): BayPose => ({ x: 15, z: -8 + i * (BAY_D + 0.8), angle: Math.PI / 2 });
+      const ti = pick([1, 2]);
       return {
         hint: 'Parke SEITWÄRTS zwischen den Autos ein',
-        target: strip(1),
-        spawn: { x: 10.5, z: -10, angle: Math.PI / 2 },
-        parked: [strip(0), strip(2)],
+        target: strip(ti),
+        spawn: { x: rand(9.5, 11.5), z: strip(ti).z - rand(3, 5), angle: Math.PI / 2 },
+        parked: [strip(ti - 1), strip(ti + 1)],
         reversed: false,
       };
     }

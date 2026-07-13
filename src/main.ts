@@ -304,6 +304,9 @@ function startParking(sel: MenuSelection) {
   rig.setCameraTilt(0); // clear any leftover roll from a previous race
   rig.setBoostFov(false);
   engineSound.setEnabled(false); // parking is quiet: only gear clicks, no engine drone
+  // Camera views the player can cycle with the ANSICHT button.
+  const camModes = ['nah', 'weit', 'verfolg'] as const;
+  let camIdx = 0;
   const hud = new ParkingHud(app, {
     onRetry: () => {
       hud.destroy();
@@ -314,6 +317,9 @@ function startParking(sel: MenuSelection) {
       hud.destroy();
       touch?.destroy();
       showMenu();
+    },
+    onToggleCam: () => {
+      camIdx = (camIdx + 1) % camModes.length;
     },
   });
 
@@ -341,17 +347,28 @@ function startParking(sel: MenuSelection) {
     const localInput = touch ? combineInputs(input.read(), touch.read()) : input.read();
     parking.update(dt, localInput);
 
-    // Frame the car AND the target bay together, so you can always see where you're
-    // going and the cars you must avoid. Pull higher the further apart they are.
+    // Three selectable views (ANSICHT button): a close overhead, a wider
+    // overhead, and a low chase behind the car.
     const p = parking.player.body.position;
     const t = parking.targetPos;
     const midX = (p.x + t.x) / 2;
     const midZ = (p.z + t.z) / 2;
     const sep = Math.hypot(p.x - t.x, p.z - t.z);
-    const height = 17 + sep * 0.85;
-    const camTarget = new THREE.Vector3(midX, height, midZ + 8);
-    rig.camera.position.lerp(camTarget, 0.1);
-    rig.camera.lookAt(midX, 0, midZ);
+    const mode = camModes[camIdx];
+    if (mode === 'verfolg') {
+      // Low chase camera behind the car's facing direction.
+      const h = headingOf(parking.player);
+      const camTarget = new THREE.Vector3(p.x - h.x * 8, 3.2, p.z - h.z * 8);
+      rig.camera.position.lerp(camTarget, 0.12);
+      rig.camera.lookAt(p.x + h.x * 4, 0.6, p.z + h.z * 4);
+    } else {
+      // Overhead framing car + bay; 'nah' sits noticeably lower than 'weit'.
+      const base = mode === 'nah' ? 10 : 16;
+      const height = base + sep * (mode === 'nah' ? 0.5 : 0.85);
+      const camTarget = new THREE.Vector3(midX, height, midZ + (mode === 'nah' ? 5 : 8));
+      rig.camera.position.lerp(camTarget, 0.1);
+      rig.camera.lookAt(midX, 0, midZ);
+    }
     rig.render();
   }
   frameHandle = requestAnimationFrame(loop);

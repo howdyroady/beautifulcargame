@@ -14,7 +14,7 @@ export class ParkingHud {
     return this.pause.paused;
   }
 
-  constructor(container: HTMLElement, callbacks: { onRetry: () => void; onMenu: () => void }) {
+  constructor(container: HTMLElement, callbacks: { onRetry: () => void; onMenu: () => void; onToggleCam?: () => void }) {
     this.root = document.createElement('div');
     this.root.className = 'hud';
     this.root.innerHTML = `
@@ -24,7 +24,10 @@ export class ParkingHud {
           <div class="parking-hits" data-hits>❤❤❤</div>
         </div>
         <div class="parking-hint" data-hint></div>
-        <div class="arcade-time" data-time>0:00</div>
+        <div class="arcade-topright">
+          <button class="hud-cambtn" data-cam aria-label="Kamera">🎥 ANSICHT</button>
+          <div class="arcade-time" data-time>0:00</div>
+        </div>
       </div>
       <div class="race-results" data-overlay style="display:none">
         <h2 data-overlay-title></h2>
@@ -47,6 +50,7 @@ export class ParkingHud {
     };
     bind('[data-retry]', callbacks.onRetry);
     bind('[data-tomenu]', callbacks.onMenu);
+    if (callbacks.onToggleCam) bind('[data-cam]', callbacks.onToggleCam);
 
     this.pause = new PauseOverlay(this.root, this.root.querySelector('[data-pause]') as HTMLElement, {
       onRestart: callbacks.onRetry,
