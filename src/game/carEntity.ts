@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { createCarModel, type CarModel } from '../car/carModel';
-import { createCarBody, applyCarControl, computeSlipAngle, DEFAULT_CAR_CONFIG } from '../physics/carPhysics';
+import { computeSlipAngle } from '../physics/carPhysics';
+import { RaycastCar, chassisRestHeight } from '../physics/raycastCar';
 import { computeComebackBuff } from './comeback';
 import type { CarInput } from '../input/input';
 import type { ParticlePool } from '../effects/particles';
@@ -19,6 +20,7 @@ export interface CarEffects {
 
 export class CarEntity {
   model: CarModel;
+  car: RaycastCar;
   body: CANNON.Body;
   hp = MAX_HP;
   alive = true;
@@ -30,8 +32,6 @@ export class CarEntity {
   private lastHitAt = 0;
   private smokeTimer = 0;
   matchTime = 0;
-  private suspensionOffset = 0;
-  private lastVelY = 0;
 
   constructor(
     scene: THREE.Scene,
@@ -44,9 +44,9 @@ export class CarEntity {
   ) {
     this.model = prebuiltModel ?? createCarModel(color);
     scene.add(this.model.group);
-    this.body = createCarBody(this.model.dims, carMaterial, spawn);
+    this.car = new RaycastCar(world, this.model.dims, carMaterial, spawn);
+    this.body = this.car.body;
     this.body.quaternion.setFromEuler(0, facing, 0);
-    world.addBody(this.body);
     this.syncMesh();
   }
 
@@ -100,10 +100,12 @@ export class CarEntity {
     this.hp = MAX_HP;
     this.alive = true;
     this.effects = { shieldCharges: 0, ramUntil: 0, nitroUntil: 0, empUntil: 0 };
-    this.body.position.copy(spawn);
+    // Respawn with the suspension settled (see RaycastCar constructor).
+    this.body.position.set(spawn.x, chassisRestHeight(this.model.dims), spawn.z);
     this.body.velocity.set(0, 0, 0);
     this.body.angularVelocity.set(0, 0, 0);
     this.body.quaternion.setFromEuler(0, facing, 0);
+    this.car.currentSteer = 0;
     this.syncMesh();
   }
 
@@ -115,7 +117,7 @@ export class CarEntity {
       ? { throttle: input.throttle * 0.3, steer: input.steer * -0.4, brake: input.brake, nitro: false }
       : input;
 
-    applyCarControl(this.body, effectiveInput, dt, DEFAULT_CAR_CONFIG, speedMult, comeback.handlingMultiplier);
+    this.car.applyControl(effectiveInput, dt, speedMult, comeback.handlingMultiplier);
 
     if (terrainEffect.boostX !== 0 || terrainEffect.boostZ !== 0) {
       this.body.applyForce(new CANNON.Vec3(terrainEffect.boostX * 45, 0, terrainEffect.boostZ * 45), new CANNON.Vec3());
@@ -124,12 +126,6 @@ export class CarEntity {
     // Drift detection
     this.slipAngle = computeSlipAngle(this.body);
     this.isDrifting = this.slipAngle > 0.25 && Math.hypot(this.body.velocity.x, this.body.velocity.z) > 5;
-
-    // Visual suspension: body bobs on vertical velocity changes (landing, bumps)
-    const velYDelta = this.body.velocity.y - this.lastVelY;
-    this.lastVelY = this.body.velocity.y;
-    this.suspensionOffset += velYDelta * 0.015;
-    this.suspensionOffset *= 0.88; // dampen
 
     this.syncMesh();
 
@@ -210,20 +206,32 @@ export class CarEntity {
   }
 
   private syncMesh() {
-    this.model.group.position.set(
-      this.body.position.x,
-      this.body.position.y + this.suspensionOffset,
-      this.body.position.z,
-    );
+    // The model group's origin is at ground level while the physics body's is
+    // the chassis centre. Anchor the visuals to the average physics wheel
+    // height so the tires always touch the road no matter how the suspension
+    // is compressed, and let the group inherit the chassis pitch/roll.
+    const dims = this.model.dims;
+    let wheelYSum = 0;
+    for (let i = 0; i < 4; i++) wheelYSum += this.car.wheelPose(i).y;
+    const groundY = wheelYSum / 4 - dims.wheelRadius;
+
+    this.model.group.position.set(this.body.position.x, groundY, this.body.position.z);
     this.model.group.quaternion.set(
       this.body.quaternion.x,
       this.body.quaternion.y,
       this.body.quaternion.z,
       this.body.quaternion.w,
     );
+
     const speed = Math.hypot(this.body.velocity.x, this.body.velocity.z);
-    for (const wheel of this.model.wheels) {
+    this.model.wheels.forEach((wheel, i) => {
       wheel.rotation.z -= speed * 0.13;
-    }
+      // Front wheels (index 0/1 = +x in the build order) visually steer.
+      // Index 1 is the right-side wheel, built with a π base yaw.
+      if (i < 2) wheel.rotation.y = (i === 1 ? Math.PI : 0) + this.car.currentSteer;
+      // Per-wheel suspension: offset each wheel by its deviation from the mean.
+      const dy = this.car.wheelPose(i).y - wheelYSum / 4;
+      wheel.position.y = dims.wheelRadius + THREE.MathUtils.clamp(dy, -0.18, 0.18);
+    });
   }
 }

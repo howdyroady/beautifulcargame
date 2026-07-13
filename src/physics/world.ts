@@ -39,6 +39,19 @@ export function createPhysicsWorld(): PhysicsWorld {
 
   let accumulator = 0;
   const step = (dt: number) => {
+    // cannon-es never refreshes a body's AABB when its pose is mutated after
+    // addBody (in-place position/quaternion writes don't set aabbNeedsUpdate),
+    // and world.rayTest silently skips bodies whose stale AABB doesn't overlap
+    // the ray — the RaycastVehicle wheels then "find no ground" and the car
+    // drops onto its chassis box. Refresh static bodies every frame; the AABB
+    // math is trivial next to the solver.
+    for (const b of world.bodies) {
+      if (b.mass === 0) {
+        b.aabbNeedsUpdate = true;
+        b.updateAABB();
+      }
+    }
+
     accumulator += dt;
     const maxTime = FIXED_STEP * MAX_SUBSTEPS;
     if (accumulator > maxTime) accumulator = maxTime;
