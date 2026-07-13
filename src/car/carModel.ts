@@ -9,10 +9,10 @@ export interface CarDimensions {
 }
 
 export const CAR_DIMENSIONS: CarDimensions = {
-  length: 4.59,
-  width: 1.78,
-  height: 1.4,
-  wheelRadius: 0.35,
+  length: 4.62,
+  width: 1.86, // wider stance
+  height: 1.24, // lower, sportier roofline
+  wheelRadius: 0.37,
 };
 
 export interface CarModel {
