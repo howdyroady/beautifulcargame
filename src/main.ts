@@ -55,7 +55,7 @@ const rig = createSceneRig(app);
 // is far easier in landscape.
 const rotateHint = document.createElement('div');
 rotateHint.className = 'rotate-hint';
-rotateHint.innerHTML = `<div class="rotate-hint-icon">⟳</div><p>Für die beste Steuerung<br>Handy quer drehen</p>`;
+rotateHint.innerHTML = `<div class="rotate-hint-icon">⟳</div><p>Handy quer drehen<br><span class="rotate-hint-sub">Das Spiel startet danach</span></p>`;
 app.appendChild(rotateHint);
 
 /** Toggles the body.playing flag that gates in-game-only overlays (rotate hint). */
@@ -99,6 +99,14 @@ function headingOf(car: CarEntity): { x: number; z: number } {
   );
   const len = Math.hypot(f.x, f.z) || 1;
   return { x: f.x / len, z: f.z / len };
+}
+
+// Matches the CSS media query that shows the "please rotate" overlay. While it's
+// true, the local game loops freeze so the countdown doesn't tick away and the
+// race doesn't start behind the hint — the game waits until the phone is turned.
+const portraitQuery = window.matchMedia('(max-width: 900px) and (orientation: portrait)');
+function orientationBlocked(): boolean {
+  return isTouchDevice() && portraitQuery.matches;
 }
 
 function showMenu() {
@@ -245,7 +253,7 @@ async function startArcadeRace(sel: MenuSelection) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
-    if (hud.paused) {
+    if (hud.paused || orientationBlocked()) {
       engineSound.setScreech(false);
       rig.render();
       return;
@@ -338,7 +346,7 @@ function startParking(sel: MenuSelection) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
-    if (hud.paused) {
+    if (hud.paused || orientationBlocked()) {
       rig.render();
       return;
     }
@@ -422,7 +430,7 @@ function startLocalDerby(sel: MenuSelection) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
-    if (hud.paused) {
+    if (hud.paused || orientationBlocked()) {
       rig.render();
       return;
     }

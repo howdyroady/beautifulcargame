@@ -780,6 +780,11 @@ button, input, .mode-btn, .menu-btn {
   font-size: 3.4rem;
   animation: rotate-hint-spin 2.2s ease-in-out infinite;
 }
+.rotate-hint-sub {
+  font-size: 0.85rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
 @keyframes rotate-hint-spin {
   0%, 100% { transform: rotate(-18deg); }
   50% { transform: rotate(72deg); }

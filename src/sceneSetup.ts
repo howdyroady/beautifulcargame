@@ -5,6 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 
 export interface SceneRig {
   scene: THREE.Scene;
@@ -233,6 +234,12 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   speedFx.uniforms.grainAmount.value = isTouch ? 0.008 : 0.014;
   composer.addPass(speedFx);
 
+  // The EffectComposer renders into an offscreen buffer, which bypasses the
+  // renderer's own MSAA — so every edge was jagged (the classic "cheap 3D"
+  // tell). One cheap FXAA pass restores anti-aliasing on every device.
+  const fxaa = new ShaderPass(FXAAShader);
+  composer.addPass(fxaa);
+
   composer.addPass(new OutputPass());
 
   let shakeMagnitude = 0;
@@ -251,6 +258,8 @@ export function createSceneRig(container: HTMLElement): SceneRig {
     renderer.setSize(clientWidth, clientHeight);
     composer.setSize(clientWidth, clientHeight);
     bloom.setSize(clientWidth, clientHeight);
+    const pr = renderer.getPixelRatio();
+    fxaa.material.uniforms['resolution'].value.set(1 / (clientWidth * pr), 1 / (clientHeight * pr));
   };
   window.addEventListener('resize', resize);
   window.visualViewport?.addEventListener('resize', resize);
