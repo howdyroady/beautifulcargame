@@ -24,11 +24,39 @@ import { engineSound } from './audio/engineSound';
 import type { CarEntity } from './game/carEntity';
 
 // --- Mobile zoom traps -----------------------------------------------------
-// iOS Safari ignores user-scalable=no: pinch and double-tap still zoom, and once zoomed the
-// pointer coordinates no longer match layout space — the joystick reads garbage and the player
-// is stuck. Block both gestures at the document level.
-document.addEventListener('gesturestart', (e) => e.preventDefault());
-document.addEventListener('gesturechange', (e) => e.preventDefault());
+// iOS Safari ignores user-scalable=no AND touch-action in enough cases that
+// double-tap still zooms, and once zoomed (with user-scalable=no) it can't be
+// pinched back out — the player is stuck. Kill every zoom gesture in JS.
+//
+// The reliable double-tap fix is to preventDefault the SECOND tap's *touchstart*
+// (that's what iOS turns into a zoom), detected purely by timing. We never touch
+// the first tap, so normal taps/clicks keep working; and our controls use
+// pointer events, which fire independently of the prevented touch default, so
+// steering is unaffected. Excludes the join-code input and the menu (so it can
+// still scroll and focus).
+const isFormTarget = (t: EventTarget | null) =>
+  t instanceof HTMLElement && (t.tagName === 'INPUT' || !!t.closest('.menu'));
+
+let lastTouchEndAt = 0;
+document.addEventListener(
+  'touchstart',
+  (e) => {
+    if (e.touches.length > 1) {
+      e.preventDefault(); // pinch-zoom
+      return;
+    }
+    if (Date.now() - lastTouchEndAt <= 450 && !isFormTarget(e.target)) {
+      e.preventDefault(); // rapid second tap → would zoom
+    }
+  },
+  { passive: false },
+);
+document.addEventListener('touchend', () => { lastTouchEndAt = Date.now(); }, { passive: true });
+// Backstops.
+document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
 // Selection/context-menu on long-press also hijacks touches (see style.css note).
 document.addEventListener('selectstart', (e) => {
   if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
@@ -36,16 +64,6 @@ document.addEventListener('selectstart', (e) => {
 document.addEventListener('contextmenu', (e) => {
   if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
 });
-let lastTouchEnd = 0;
-document.addEventListener(
-  'touchend',
-  (e) => {
-    const now = Date.now();
-    if (now - lastTouchEnd < 350) e.preventDefault(); // double-tap zoom
-    lastTouchEnd = now;
-  },
-  { passive: false },
-);
 
 const app = document.getElementById('app')!;
 const rig = createSceneRig(app);
