@@ -292,10 +292,15 @@ export class Circuit {
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geo.setIndex(indices);
     geo.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({
+    // Wet-street sheen: a clear-coat over damp asphalt so the neon guardrails
+    // and city lights streak across the road (the signature rainy-night look).
+    const mat = new THREE.MeshPhysicalMaterial({
       map: buildAsphaltTexture(),
-      roughness: 0.82,
-      metalness: 0.06,
+      roughness: 0.42,
+      metalness: 0.2,
+      clearcoat: 0.7,
+      clearcoatRoughness: 0.35,
+      envMapIntensity: 1.4,
       side: THREE.DoubleSide,
     });
     const road = new THREE.Mesh(geo, mat);
@@ -314,9 +319,9 @@ export class Circuit {
     // Neon strip
     const neonGeo = new THREE.BoxGeometry(1, 0.1, 1);
     const neonMat = new THREE.MeshStandardMaterial({
-      color: 0x40d0ff,
-      emissive: 0x1090ff,
-      emissiveIntensity: 2.0,
+      color: 0x60e0ff,
+      emissive: 0x18a8ff,
+      emissiveIntensity: 3.4,
       roughness: 0.2,
     });
     const neon = new THREE.InstancedMesh(neonGeo, neonMat, count);

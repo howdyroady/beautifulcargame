@@ -21,13 +21,19 @@ export interface SceneRig {
   setCameraTilt: (radians: number) => void;
 }
 
-/* ─── Chromatic aberration + film grain (single pass, cheap) ─── */
+/* ─── Cinematic grade: chromatic aberration + colour grade + vignette + grain.
+ * One cheap pass that lifts the whole image toward a high-end arcade-racer look:
+ * punchy contrast, boosted saturation, cool shadows / warm highlights, and a
+ * soft vignette that frames the action. ─── */
 const SpeedFxShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
     chromaAmount: { value: 0.0 },
     grainAmount: { value: 0.012 },
     time: { value: 0.0 },
+    saturation: { value: 1.16 },
+    contrast: { value: 1.07 },
+    vignette: { value: 0.24 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -41,7 +47,16 @@ const SpeedFxShader = {
     uniform float chromaAmount;
     uniform float grainAmount;
     uniform float time;
+    uniform float saturation;
+    uniform float contrast;
+    uniform float vignette;
     varying vec2 vUv;
+
+    vec3 adjustSaturation(vec3 c, float s) {
+      float l = dot(c, vec3(0.2125, 0.7154, 0.0721));
+      return mix(vec3(l), c, s);
+    }
+
     void main() {
       vec2 dir = vUv - vec2(0.5);
       float d = length(dir);
@@ -50,10 +65,25 @@ const SpeedFxShader = {
       float g = texture2D(tDiffuse, vUv).g;
       float b = texture2D(tDiffuse, vUv - dir * ca).b;
       vec3 color = vec3(r, g, b);
-      // Film grain
+
+      // Contrast about mid-grey, then saturation.
+      color = (color - 0.5) * contrast + 0.5;
+      color = adjustSaturation(color, saturation);
+
+      // Cinematic split-tone: cool teal shadows, warm highlights.
+      float luma = dot(color, vec3(0.299, 0.587, 0.114));
+      vec3 shadowTint = vec3(0.96, 1.00, 1.06);
+      vec3 highTint   = vec3(1.07, 1.02, 0.93);
+      color *= mix(shadowTint, highTint, smoothstep(0.15, 0.85, luma));
+
+      // Soft vignette.
+      color *= mix(1.0, smoothstep(0.92, 0.32, d), vignette);
+
+      // Film grain.
       float grain = (fract(sin(dot(vUv * time, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * grainAmount;
       color += grain;
-      gl_FragColor = vec4(color, 1.0);
+
+      gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
     }
   `,
 };
@@ -165,7 +195,7 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.28;
   container.appendChild(renderer.domElement);
 
   // Cinematic overlays (CSS, zero GPU cost)
@@ -227,7 +257,9 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.5, 0.3, 0.88);
+  // Punchier neon glow (Asphalt-style): stronger, wider, lower threshold so the
+  // guardrails, taillights and city lights bloom without washing the road out.
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.58, 0.42, 0.82);
   composer.addPass(bloom);
 
   const speedFx = new ShaderPass(SpeedFxShader);
