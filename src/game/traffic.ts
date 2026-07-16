@@ -36,6 +36,9 @@ export class Traffic {
 
     for (let i = 0; i < count; i++) {
       const model = createCarModel(TRAFFIC_COLORS[i % TRAFFIC_COLORS.length]);
+      // Night traffic drives with its lights on — the glowing taillights ahead
+      // are what make the road read as "alive" (and warn the player early).
+      model.setBrakeLights?.(true);
       scene.add(model.group);
 
       // ~30–45 km/h in the sim's units — clearly slower than the racers.

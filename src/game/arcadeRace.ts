@@ -7,6 +7,7 @@ import { attachHeadlights } from '../car/carModel';
 import { ParticlePool } from '../effects/particles';
 import { deriveRacerInput, type RacerAIState } from '../ai/racerAI';
 import { Traffic } from './traffic';
+import { SkidMarkPool } from '../effects/skidmarks';
 import type { CarInput } from '../input/input';
 import { NEUTRAL_INPUT } from '../input/input';
 import { engineSound } from '../audio/engineSound';
@@ -82,6 +83,7 @@ export class ArcadeRace {
   private finishedOrder: number[] = [];
   private resultsSent = false;
   private traffic: Traffic | null = null;
+  private skids!: SkidMarkPool;
 
   constructor(scene: THREE.Scene, opts: ArcadeRaceOptions, callbacks: ArcadeRaceCallbacks = {}) {
     this.scene = scene;
@@ -90,6 +92,7 @@ export class ArcadeRace {
     this.config = TRACKS[opts.trackId] ?? TRACKS.city;
     this.circuit = new Circuit(scene, this.physics.world, this.physics.groundMaterial, this.config, this.physics.wallMaterial);
     this.particles = new ParticlePool(scene, 200);
+    this.skids = new SkidMarkPool(scene);
 
     const total = opts.humanCount + opts.aiCount;
     const curveLength = this.circuit.curve.getLength();
@@ -307,6 +310,31 @@ export class ArcadeRace {
       const rubberFactor = racer.finished ? 1 : 1 + (posRank - (totalCars - 1) / 2) * -0.04;
       const friction = (racer.nitroActive ? NITRO_SPEED_MULT : 1) * rubberFactor * (1 + draftBoost);
       car.update(dt, racer.finished ? NEUTRAL_INPUT : input, { friction, boostX, boostZ }, this.particles);
+
+      // Rubber on the road: lay skid marks while drifting or braking at speed.
+      const carSpeed = Math.hypot(car.body.velocity.x, car.body.velocity.z);
+      if (car.isDrifting || (input.brake && carSpeed > 6)) {
+        const f = new CANNON.Vec3(1, 0, 0);
+        car.body.quaternion.vmult(f, f);
+        const fl = Math.hypot(f.x, f.z) || 1;
+        const fx = f.x / fl;
+        const fz = f.z / fl;
+        const rx = -fz;
+        const rz = fx;
+        const dims = car.model.dims;
+        const wheelX = dims.length * 0.33;
+        const wheelZ = dims.width / 2 - 0.06;
+        const angle = Math.atan2(-fx, -fz);
+        const p = car.body.position;
+        for (const s of [1, -1]) {
+          this.skids.drop(
+            `${i}:${s}`,
+            p.x - fx * wheelX + rx * wheelZ * s,
+            p.z - fz * wheelX + rz * wheelZ * s,
+            angle,
+          );
+        }
+      }
     });
 
     this.physics.step(dt);

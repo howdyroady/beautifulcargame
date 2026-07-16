@@ -181,6 +181,53 @@ function buildSkyDome(): THREE.Group {
   return group;
 }
 
+/* ─── Rain: streaking drops in a box that rides along with the camera. Sells
+ * the wet, reflective road. LineSegments (a short vertical streak per drop)
+ * read as rain far better than points, and one draw call keeps it free. ─── */
+function buildRain(count: number): { object: THREE.LineSegments; update: (camPos: THREE.Vector3, dt: number) => void } {
+  const RANGE = 34; // half-extent of the rain box around the camera
+  const TOP = 26;
+  const positions = new Float32Array(count * 6); // two vertices per drop
+  const speeds = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    positions[i * 6] = (Math.random() * 2 - 1) * RANGE;
+    positions[i * 6 + 1] = Math.random() * TOP;
+    positions[i * 6 + 2] = (Math.random() * 2 - 1) * RANGE;
+    speeds[i] = 30 + Math.random() * 16;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.LineBasicMaterial({
+    color: 0x9db8d8,
+    transparent: true,
+    opacity: 0.32,
+    fog: false,
+    depthWrite: false,
+  });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.frustumCulled = false;
+  lines.renderOrder = 5;
+
+  const update = (camPos: THREE.Vector3, dt: number) => {
+    const arr = geo.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < count; i++) {
+      let y = arr.getY(i * 2) - speeds[i] * dt;
+      if (y < 0) {
+        y = TOP * (0.7 + Math.random() * 0.3);
+        arr.setX(i * 2, camPos.x + (Math.random() * 2 - 1) * RANGE);
+        arr.setZ(i * 2, camPos.z + (Math.random() * 2 - 1) * RANGE);
+      }
+      const x = arr.getX(i * 2);
+      const z = arr.getZ(i * 2);
+      arr.setY(i * 2, y);
+      // Streak length scales with fall speed.
+      arr.setXYZ(i * 2 + 1, x, y + speeds[i] * 0.035, z);
+    }
+    arr.needsUpdate = true;
+  };
+  return { object: lines, update };
+}
+
 export function createSceneRig(container: HTMLElement): SceneRig {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x03040a);
@@ -190,6 +237,12 @@ export function createSceneRig(container: HTMLElement): SceneRig {
   scene.add(skyDome);
 
   const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+  // Night rain — matches the wet clear-coated road. Fewer drops on phones.
+  const rain = buildRain(isTouch ? 350 : 700);
+  rain.object.userData.persistent = true;
+  scene.add(rain.object);
+
   const renderer = new THREE.WebGLRenderer({ antialias: !isTouch, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, isTouch ? 1.5 : 2));
   renderer.shadowMap.enabled = true;
@@ -333,6 +386,8 @@ export function createSceneRig(container: HTMLElement): SceneRig {
     // Rotate cloud layer slowly
     const cloudSphere = (skyDome as any)._cloudSphere as THREE.Mesh | undefined;
     if (cloudSphere) cloudSphere.rotation.y += 0.0001;
+
+    rain.update(camera.position, 1 / 60);
 
     composer.render();
   };

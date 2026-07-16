@@ -164,36 +164,47 @@ function buildAsphaltTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+/**
+ * Night-facade texture used as an EMISSIVE map: black = no glow, lit windows in
+ * warm/cool office colours. Per-tower "personality": each call rolls its own
+ * occupancy rate and palette bias, and whole floors are sometimes dark or fully
+ * lit — like real offices — instead of uniform random noise.
+ */
 function buildWindowTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 256;
   const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#0c0e14';
+  ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, 128, 256);
-  // Window grid with various lit colors
-  const windowColors = ['#ffd98a', '#9fd0ff', '#ff9060', '#80ffb0', '#d090ff', '#60c0ff'];
+
+  const windowColors = ['#ffd98a', '#ffe9b8', '#9fd0ff', '#ff9060', '#80ffb0', '#60c0ff'];
+  const bias = Math.floor(Math.random() * windowColors.length);
+  const occupancy = 0.25 + Math.random() * 0.3;
+
   for (let y = 6; y < 248; y += 14) {
+    // Whole-floor moods: some floors dark, some working late.
+    const floorRoll = Math.random();
+    const floorRate = floorRoll < 0.18 ? 0 : floorRoll > 0.86 ? 0.9 : occupancy;
     for (let x = 6; x < 120; x += 12) {
-      const lit = Math.random() < 0.4;
-      if (lit) {
-        ctx.fillStyle = windowColors[Math.floor(Math.random() * windowColors.length)];
-        // Slight glow effect
-        ctx.globalAlpha = 0.15;
+      if (Math.random() < floorRate) {
+        const c = windowColors[Math.random() < 0.6 ? bias : Math.floor(Math.random() * windowColors.length)];
+        ctx.fillStyle = c;
+        ctx.globalAlpha = 0.18;
         ctx.fillRect(x - 1, y - 1, 10, 12);
+        ctx.globalAlpha = 0.75 + Math.random() * 0.25;
+        ctx.fillRect(x, y, 8, 10);
         ctx.globalAlpha = 1;
       }
-      ctx.fillStyle = lit ? (windowColors[Math.floor(Math.random() * windowColors.length)]) : '#181a22';
-      ctx.fillRect(x, y, 8, 10);
     }
   }
-  // Random LED panel on some floors
-  if (Math.random() > 0.5) {
-    const py = 20 + Math.floor(Math.random() * 200);
-    const ledColor = ['#ff3050', '#1080ff', '#40ff80', '#ff8020'][Math.floor(Math.random() * 4)];
+  // Random LED strip on some towers (rooftop signage vibe).
+  if (Math.random() > 0.55) {
+    const py = 10 + Math.floor(Math.random() * 30);
+    const ledColor = ['#ff3050', '#1080ff', '#40ff80', '#ff8020', '#c040ff'][Math.floor(Math.random() * 5)];
     ctx.fillStyle = ledColor;
-    ctx.globalAlpha = 0.6;
-    ctx.fillRect(4, py, 120, 20);
+    ctx.globalAlpha = 0.8;
+    ctx.fillRect(4, py, 120, 12);
     ctx.globalAlpha = 1;
   }
   const tex = new THREE.CanvasTexture(canvas);
@@ -520,12 +531,31 @@ export class Circuit {
   }
 
   private buildBuildings() {
-    const windowTex = buildWindowTexture();
+    // Three texture variants split across three instanced meshes — kills the
+    // "every tower is the same" repetition at the cost of 2 extra draw calls.
+    // The windows are wired as an *emissive map* on a near-black facade, so lit
+    // windows genuinely glow (and bloom), instead of tinting a grey box.
+    const VARIANTS = 3;
     const COUNT = 55;
     const geo = new THREE.BoxGeometry(1, 1, 1);
-    const mat = new THREE.MeshStandardMaterial({ map: windowTex, color: 0xb0b4be, roughness: 0.75 });
-    const mesh = new THREE.InstancedMesh(geo, mat, COUNT);
+    const meshes: THREE.InstancedMesh[] = [];
+    for (let v = 0; v < VARIANTS; v++) {
+      const windowTex = buildWindowTexture();
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x14161d,
+        emissive: 0xffffff,
+        emissiveMap: windowTex,
+        emissiveIntensity: 1.35,
+        roughness: 0.8,
+      });
+      const m = new THREE.InstancedMesh(geo, mat, Math.ceil(COUNT / VARIANTS));
+      meshes.push(m);
+    }
+    const counters = new Array(VARIANTS).fill(0);
     const dummy = new THREE.Object3D();
+    // Red aviation beacons for the tallest towers.
+    const beaconPositions: THREE.Vector3[] = [];
+
     for (let i = 0; i < COUNT; i++) {
       const t = i / COUNT;
       const { pos, left } = this.sampleFrame(t);
@@ -539,6 +569,8 @@ export class Circuit {
           break;
         }
       }
+      const v = i % VARIANTS;
+      const mesh = meshes[v];
       if (tooClose) {
         dummy.scale.setScalar(0.001);
         dummy.position.set(0, -50, 0);
@@ -548,11 +580,33 @@ export class Circuit {
         dummy.position.set(p.x, h / 2, p.z);
         dummy.scale.set(w, h, w);
         dummy.rotation.set(0, Math.random() * Math.PI, 0);
+        if (h > 30) beaconPositions.push(new THREE.Vector3(p.x, h + 0.6, p.z));
       }
       dummy.updateMatrix();
-      mesh.setMatrixAt(i, dummy.matrix);
+      mesh.setMatrixAt(counters[v]++, dummy.matrix);
     }
-    this.scene.add(mesh);
+    for (const m of meshes) {
+      m.count = Math.max(1, counters[meshes.indexOf(m)]);
+      this.scene.add(m);
+    }
+
+    if (beaconPositions.length > 0) {
+      const beaconGeo = new THREE.SphereGeometry(0.45, 8, 6);
+      const beaconMat = new THREE.MeshStandardMaterial({
+        color: 0xff2020,
+        emissive: 0xff1010,
+        emissiveIntensity: 4,
+      });
+      const beacons = new THREE.InstancedMesh(beaconGeo, beaconMat, beaconPositions.length);
+      beaconPositions.forEach((bp, idx) => {
+        dummy.position.copy(bp);
+        dummy.scale.setScalar(1);
+        dummy.rotation.set(0, 0, 0);
+        dummy.updateMatrix();
+        beacons.setMatrixAt(idx, dummy.matrix);
+      });
+      this.scene.add(beacons);
+    }
   }
 
   nearestT(x: number, z: number, hint: number): number {
