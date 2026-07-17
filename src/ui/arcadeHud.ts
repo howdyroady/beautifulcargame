@@ -116,6 +116,15 @@ export class ArcadeHud {
     }
   }
 
+  /** Big centre flash (e.g. "FREIE BAHN!") that fades on its own. */
+  flash(text: string) {
+    this.center.textContent = text;
+    this.center.className = 'hud-center-text countdown go-flash';
+    setTimeout(() => {
+      if (this.center.textContent === text) this.center.textContent = '';
+    }, 1500);
+  }
+
   setCountdown(remaining: number) {
     const n = Math.ceil(remaining);
     if (n > 0) {

@@ -38,7 +38,7 @@ export const DEFAULT_RC_CONFIG: RaycastCarConfig = {
   engineForce: 3800,
   maxBrake: 55,
   maxSteer: 0.55,
-  maxSpeed: 18,
+  maxSpeed: 19,
   frictionSlip: 3.2,
 };
 
@@ -150,11 +150,15 @@ export class RaycastCar {
     this.vehicle.setSteeringValue(this.currentSteer, 0);
     this.vehicle.setSteeringValue(this.currentSteer, 1);
 
-    // --- Engine: AWD with a slight rear bias, fading near the speed cap.
+    // --- Engine: AWD, with a realistic power curve — strong low-end punch that
+    // tapers hard toward top speed, so the last 20% takes a clear road (or
+    // nitro) to actually reach instead of arriving in two seconds.
     const cap = this.config.maxSpeed * speedMultiplier;
     let engine = 0;
     if (input.throttle > 0 && velForward < cap) {
-      engine = input.throttle * this.config.engineForce * speedMultiplier * (1 - Math.max(0, velForward / cap) * 0.3);
+      const ratio = Math.max(0, velForward / cap);
+      const fade = 1 - Math.pow(ratio, 1.6) * 0.72;
+      engine = input.throttle * this.config.engineForce * speedMultiplier * fade;
     } else if (input.throttle < 0 && velForward > -cap * 0.45) {
       engine = input.throttle * this.config.engineForce * 0.65;
     }

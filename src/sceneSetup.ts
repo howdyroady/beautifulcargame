@@ -440,14 +440,16 @@ export function updateArenaCamera(camera: THREE.PerspectiveCamera, positions: { 
   camera.lookAt(cx, 0, cz);
 }
 
-/** Asphalt-style chase cam: behind the car, drops with speed, cinematic lag. */
+/** Asphalt-style chase cam: tight behind the car, drops with speed, cinematic lag. */
 export function updateChaseCamera(
   camera: THREE.PerspectiveCamera,
   target: { x: number; z: number; headingX: number; headingZ: number; speed: number },
 ) {
-  const back = 8.5 + Math.min(5, target.speed * 0.14);
-  const height = 3.2 + Math.min(2.0, target.speed * 0.04);
-  const lookAhead = 7 + Math.min(4, target.speed * 0.2);
+  // Tighter framing: the car fills more of the screen, which reads faster and
+  // makes squeezing through traffic feel closer.
+  const back = 6.4 + Math.min(3.2, target.speed * 0.1);
+  const height = 2.5 + Math.min(1.4, target.speed * 0.03);
+  const lookAhead = 7.5 + Math.min(4, target.speed * 0.2);
   const desired = new THREE.Vector3(
     target.x - target.headingX * back,
     height,

@@ -451,6 +451,12 @@ canvas {
   background: rgba(30, 170, 80, 0.72);
   color: #fff;
 }
+/* The race gas pedal is the primary control — noticeably bigger than the rest. */
+.touch-actions .touch-gas-race {
+  width: 6.4rem;
+  height: 6.4rem;
+  font-size: 0.9rem;
+}
 .touch-reverse.active {
   background: rgba(255, 170, 40, 0.6);
 }

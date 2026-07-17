@@ -15,6 +15,8 @@ export interface TrackConfig {
   groundColor: number;
   /** Multiplier on the base traffic-car count (1 = normal, higher = busier). */
   trafficDensity?: number;
+  /** Paint dashed lane dividers for this many lanes (autobahn look). */
+  lanes?: number;
 }
 
 export const TRACKS: Record<string, TrackConfig> = {
@@ -80,7 +82,8 @@ export const TRACKS: Record<string, TrackConfig> = {
     nitroPickupsAt: [0.1, 0.35, 0.6, 0.85],
     buildings: true,
     groundColor: 0x0e1018,
-    trafficDensity: 2.2,
+    trafficDensity: 3,
+    lanes: 3,
   },
   autobahn: {
     id: 'autobahn',
@@ -244,6 +247,7 @@ export class Circuit {
     );
 
     this.buildRoad();
+    if (config.lanes && config.lanes > 1) this.buildLaneMarkings(config.lanes);
     this.buildWalls(world);
     this.buildPads();
     this.buildStartLine();
@@ -317,6 +321,52 @@ export class Circuit {
     const road = new THREE.Mesh(geo, mat);
     road.receiveShadow = true;
     this.scene.add(road);
+  }
+
+  /** Dashed white lane dividers — instantly reads as a real multi-lane autobahn. */
+  private buildLaneMarkings(lanes: number) {
+    const SEGMENTS = 220;
+    const dashGeo = new THREE.PlaneGeometry(1, 0.14);
+    dashGeo.rotateX(-Math.PI / 2);
+    const dashMat = new THREE.MeshStandardMaterial({
+      color: 0xf0f2f5,
+      emissive: 0x606870,
+      emissiveIntensity: 0.35,
+      roughness: 0.5,
+    });
+    // One divider between each pair of lanes; dash every other segment.
+    const dividers = lanes - 1;
+    const mesh = new THREE.InstancedMesh(dashGeo, dashMat, SEGMENTS * dividers);
+    const dummy = new THREE.Object3D();
+    let idx = 0;
+    for (let i = 0; i < SEGMENTS; i++) {
+      const t0 = i / SEGMENTS;
+      if (i % 2 === 1) {
+        // gap — park these instances out of sight
+        for (let d = 0; d < dividers; d++) {
+          dummy.position.set(0, -60, 0);
+          dummy.scale.setScalar(0.001);
+          dummy.updateMatrix();
+          mesh.setMatrixAt(idx++, dummy.matrix);
+        }
+        continue;
+      }
+      const a = this.sampleFrame(t0);
+      const b = this.sampleFrame((i + 0.7) / SEGMENTS);
+      const angle = Math.atan2(b.pos.z - a.pos.z, b.pos.x - a.pos.x);
+      const len = a.pos.distanceTo(b.pos);
+      for (let d = 0; d < dividers; d++) {
+        // Divider offsets split the road into `lanes` equal strips.
+        const offset = ((d + 1) / lanes - 0.5) * this.config.width;
+        const mid = a.pos.clone().add(b.pos).multiplyScalar(0.5).addScaledVector(a.left, offset);
+        dummy.position.set(mid.x, 0.03, mid.z);
+        dummy.rotation.set(0, -angle, 0);
+        dummy.scale.set(len, 1, 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(idx++, dummy.matrix);
+      }
+    }
+    this.scene.add(mesh);
   }
 
   private buildWalls(world: CANNON.World | null) {

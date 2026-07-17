@@ -96,9 +96,9 @@ function clearScene() {
 }
 
 /**
- * Touch driving model for race modes: the car auto-accelerates (arrows only
- * steer), and the BREMSE button brakes at speed but *reverses* once the car is
- * nearly stopped — so hitting a wall no longer leaves you helplessly pinned.
+ * Touch driving model for race modes: explicit GAS pedal (real pedals, as
+ * requested), and the BREMSE button brakes at speed but *reverses* once the car
+ * is nearly stopped — so hitting a wall never leaves you helplessly pinned.
  */
 function applyTouchDriveModel(input: CarInput, car: CarEntity): CarInput {
   if (input.brake) {
@@ -106,7 +106,6 @@ function applyTouchDriveModel(input: CarInput, car: CarEntity): CarInput {
     if (speed < 3) return { ...input, throttle: -0.75, brake: false }; // back out of the wall
     return input; // still moving: brake normally
   }
-  if (input.throttle === 0) return { ...input, throttle: 1 }; // auto-gas
   return input;
 }
 
@@ -257,6 +256,7 @@ async function startArcadeRace(sel: MenuSelection) {
       onHud: (h) => hud.setHud(h),
       onFinish: (standings) => hud.showResults(standings),
       onShake: (m) => rig.shake(m),
+      onTrafficCleared: () => hud.flash('FREIE BAHN!'),
     },
   );
   const minimap = new Minimap(app, race.circuit);

@@ -44,8 +44,10 @@ export class TouchControls {
 
     let actions: string;
     if (layout === 'race') {
-      actions = `<div class="touch-btn touch-nitro" data-hold="nitro">NITRO</div>
-                 <div class="touch-btn touch-brake" data-hold="brake">BREMSE</div>`;
+      // Real pedals (bottom→top thanks to column-reverse): big GAS, BREMSE, NITRO.
+      actions = `<div class="touch-btn touch-gas touch-gas-race" data-hold="gas">GAS</div>
+                 <div class="touch-btn touch-brake" data-hold="brake">BREMSE</div>
+                 <div class="touch-btn touch-nitro" data-hold="nitro">NITRO</div>`;
     } else if (layout === 'parking') {
       actions = `<div class="touch-gears">
                    <div class="touch-btn touch-gear" data-gear="R">R</div>
@@ -133,9 +135,8 @@ export class TouchControls {
       this.steerLeft || this.steerRight || this.gasHeld || this.reverseHeld || this.brakeHeld || this.nitroHeld;
     if (!anyHeld) return NEUTRAL_INPUT;
     const steer = (this.steerRight ? 1 : 0) - (this.steerLeft ? 1 : 0);
-    // Race layout leaves throttle at 0 so main.ts can apply auto-gas; manual
-    // layout drives forward/back from the gas & reverse buttons.
-    const throttle = this.layout === 'manual' ? (this.gasHeld ? 1 : 0) - (this.reverseHeld ? 1 : 0) : 0;
+    // Race: explicit GAS pedal. Manual (derby): gas + reverse buttons.
+    const throttle = (this.gasHeld ? 1 : 0) - (this.layout === 'manual' && this.reverseHeld ? 1 : 0);
     return { throttle, steer, brake: this.brakeHeld, nitro: this.nitroHeld };
   }
 

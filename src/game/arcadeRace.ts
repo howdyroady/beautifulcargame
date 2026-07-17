@@ -44,6 +44,8 @@ export interface ArcadeRaceCallbacks {
   onShake?: (magnitude: number) => void;
   /** Drift combo callback for HUD. */
   onDrift?: (isDrifting: boolean, comboMultiplier: number, nitroEarned: number) => void;
+  /** Fired when the player grabs a FREIE BAHN pickup (traffic phases out). */
+  onTrafficCleared?: (seconds: number) => void;
 }
 
 export interface ArcadeRaceOptions {
@@ -58,7 +60,9 @@ export interface ArcadeRaceOptions {
 
 const AI_COLORS = [0xb03030, 0x2054c0, 0xd0a020, 0x30a060, 0x8030a0];
 const COUNTDOWN_SECONDS = 3;
-const NITRO_SPEED_MULT = 1.55;
+// Base top ≈ 228 km/h, nitro top ≈ 308 km/h — hypercar numbers instead of the
+// old 335+, and the taper in raycastCar makes the last stretch earned.
+const NITRO_SPEED_MULT = 1.35;
 const NITRO_DRAIN = 1 / 2.8;
 const NEAR_MISS_DIST = 3.4;
 const DRAFT_DIST = 6;
@@ -84,6 +88,8 @@ export class ArcadeRace {
   private resultsSent = false;
   private traffic: Traffic | null = null;
   private skids!: SkidMarkPool;
+  /** FREIE BAHN pickups: grab one and traffic phases out for a few seconds. */
+  private clearPickups: { pos: THREE.Vector3; mesh: THREE.Group; active: boolean; respawnAt: number }[] = [];
 
   constructor(scene: THREE.Scene, opts: ArcadeRaceOptions, callbacks: ArcadeRaceCallbacks = {}) {
     this.scene = scene;
@@ -144,9 +150,63 @@ export class ArcadeRace {
     const trafficN = Math.min(14, Math.round((opts.trafficCount ?? 0) * (this.config.trafficDensity ?? 1)));
     if (trafficN > 0) {
       this.traffic = new Traffic(scene, this.physics.world, this.circuit, this.physics.carMaterial, trafficN);
+      this.buildClearPickups();
     }
 
     this.callbacks.onPhaseChange?.(this.phase, { countdown: COUNTDOWN_SECONDS });
+  }
+
+  /** Cyan glowing rings on the racing line — collect for a few seconds of empty road. */
+  private buildClearPickups() {
+    for (const t of [0.22, 0.55, 0.85]) {
+      const pos = this.circuit.curve.getPointAt(t).clone();
+      const group = new THREE.Group();
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(1.15, 0.1, 10, 28),
+        new THREE.MeshStandardMaterial({ color: 0x50f0ff, emissive: 0x18c0ff, emissiveIntensity: 3.2, roughness: 0.2 }),
+      );
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = 1;
+      group.add(ring);
+      const core = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.4),
+        new THREE.MeshStandardMaterial({ color: 0xd0f8ff, emissive: 0x80e0ff, emissiveIntensity: 2.6, roughness: 0.15 }),
+      );
+      core.position.y = 1;
+      group.add(core);
+      group.position.set(pos.x, 0, pos.z);
+      this.scene.add(group);
+      this.clearPickups.push({ pos, mesh: group, active: true, respawnAt: 0 });
+    }
+  }
+
+  private updateClearPickups(dt: number) {
+    for (const p of this.clearPickups) {
+      if (!p.active) {
+        if (this.raceTime >= p.respawnAt) {
+          p.active = true;
+          p.mesh.visible = true;
+        }
+        continue;
+      }
+      p.mesh.rotation.y += dt * 2.2;
+      p.mesh.children[1].position.y = 1 + Math.sin(this.raceTime * 2.6 + p.pos.x) * 0.16;
+      // Only human players trigger it — bots shouldn't waste the ghost window.
+      for (let h = 0; h < this.humanCount; h++) {
+        const c = this.cars[h].body.position;
+        const dx = c.x - p.pos.x;
+        const dz = c.z - p.pos.z;
+        if (dx * dx + dz * dz < 2.6 * 2.6) {
+          p.active = false;
+          p.mesh.visible = false;
+          p.respawnAt = this.raceTime + 22;
+          this.traffic?.setGhost(6);
+          engineSound.playNitro();
+          this.callbacks.onTrafficCleared?.(6);
+          break;
+        }
+      }
+    }
   }
 
   private attachCrashSound(car: CarEntity, isPlayer: boolean) {
@@ -205,6 +265,7 @@ export class ArcadeRace {
     }
 
     this.raceTime += dt;
+    this.updateClearPickups(dt);
 
     // Rubber-banding
     const order = this.standings();
