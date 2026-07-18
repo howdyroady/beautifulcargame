@@ -46,6 +46,8 @@ export interface ArcadeRaceCallbacks {
   onDrift?: (isDrifting: boolean, comboMultiplier: number, nitroEarned: number) => void;
   /** Fired when the player grabs a FREIE BAHN pickup (traffic phases out). */
   onTrafficCleared?: (seconds: number) => void;
+  /** Fired when the player starts/stops driving against the track direction. */
+  onWrongWay?: (active: boolean) => void;
 }
 
 export interface ArcadeRaceOptions {
@@ -90,6 +92,9 @@ export class ArcadeRace {
   private skids!: SkidMarkPool;
   /** FREIE BAHN pickups: grab one and traffic phases out for a few seconds. */
   private clearPickups: { pos: THREE.Vector3; mesh: THREE.Group; active: boolean; respawnAt: number }[] = [];
+  private wrongWayTimer = 0;
+  private wrongWayActive = false;
+  private playerT = 0;
 
   constructor(scene: THREE.Scene, opts: ArcadeRaceOptions, callbacks: ArcadeRaceCallbacks = {}) {
     this.scene = scene;
@@ -266,6 +271,7 @@ export class ArcadeRace {
 
     this.raceTime += dt;
     this.updateClearPickups(dt);
+    this.updateWrongWay(dt);
 
     // Rubber-banding
     const order = this.standings();
@@ -424,6 +430,35 @@ export class ArcadeRace {
       this.phase = 'finished';
       this.callbacks.onPhaseChange?.('finished');
       this.callbacks.onFinish?.(this.standings());
+    }
+  }
+
+  /**
+   * Wrong-way detection for the player: compare the velocity against the track
+   * tangent at the nearest curve point. A short grace timer filters out spins
+   * and sideways moments — the warning only fires after driving backwards for
+   * real (~0.8 s), and clears the instant the direction is right again.
+   */
+  private updateWrongWay(dt: number) {
+    if (this.racers[0].finished) {
+      if (this.wrongWayActive) {
+        this.wrongWayActive = false;
+        this.callbacks.onWrongWay?.(false);
+      }
+      return;
+    }
+    const p = this.cars[0].body.position;
+    this.playerT = this.circuit.nearestT(p.x, p.z, this.playerT);
+    const tan = this.circuit.curve.getTangentAt(this.playerT).setY(0).normalize();
+    const v = this.cars[0].body.velocity;
+    const speed = Math.hypot(v.x, v.z);
+    const goingBackwards = speed > 4 && (v.x * tan.x + v.z * tan.z) / speed < -0.35;
+
+    this.wrongWayTimer = goingBackwards ? this.wrongWayTimer + dt : 0;
+    const shouldWarn = this.wrongWayTimer > 0.8;
+    if (shouldWarn !== this.wrongWayActive) {
+      this.wrongWayActive = shouldWarn;
+      this.callbacks.onWrongWay?.(shouldWarn);
     }
   }
 

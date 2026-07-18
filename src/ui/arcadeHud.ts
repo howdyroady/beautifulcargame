@@ -40,6 +40,7 @@ export class ArcadeHud {
         </div>
       </div>
       <div class="drift-combo" data-drift></div>
+      <div class="wrong-way" data-wrong-way style="display:none">⚠ FALSCHE RICHTUNG</div>
       <div class="arcade-bottom">
         <div class="arcade-speed"><span data-speed>0</span><small>km/h</small></div>
         <div class="nitro-bar"><div class="nitro-fill" data-nitro></div><span class="nitro-label">NITRO</span></div>
@@ -116,6 +117,11 @@ export class ArcadeHud {
     }
   }
 
+  setWrongWay(active: boolean) {
+    const el = this.root.querySelector('[data-wrong-way]') as HTMLDivElement;
+    el.style.display = active ? 'block' : 'none';
+  }
+
   /** Big centre flash (e.g. "FREIE BAHN!") that fades on its own. */
   flash(text: string) {
     this.center.textContent = text;
@@ -139,8 +145,15 @@ export class ArcadeHud {
 
   showResults(standings: StandingEntry[]) {
     const list = this.resultsEl.querySelector('[data-results-list]') as HTMLOListElement;
+    const medals = ['🥇', '🥈', '🥉'];
     list.innerHTML = standings
-      .map((s) => `<li class="${s.name === 'DU' ? 'me' : ''}">${s.name} ${s.finished ? '· ' + formatTime(s.finishTime) : '· DNF'}</li>`)
+      .map(
+        (s, i) => `<li class="result-row ${s.name === 'DU' ? 'me' : ''} ${i < 3 ? 'podium-' + (i + 1) : ''}">
+          <span class="result-medal">${medals[i] ?? `${i + 1}.`}</span>
+          <span class="result-name">${s.name}</span>
+          <span class="result-time">${s.finished ? formatTime(s.finishTime) : 'DNF'}</span>
+        </li>`,
+      )
       .join('');
     this.resultsEl.style.display = 'flex';
     this.resultsEl.style.pointerEvents = 'auto';

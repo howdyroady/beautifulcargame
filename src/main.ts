@@ -257,6 +257,7 @@ async function startArcadeRace(sel: MenuSelection) {
       onFinish: (standings) => hud.showResults(standings),
       onShake: (m) => rig.shake(m),
       onTrafficCleared: () => hud.flash('FREIE BAHN!'),
+      onWrongWay: (active) => hud.setWrongWay(active),
     },
   );
   const minimap = new Minimap(app, race.circuit);

@@ -766,6 +766,48 @@ canvas {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
 
+/* Pulsing wrong-way banner, centred above the speedo. */
+.wrong-way {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  padding: 0.5rem 1.2rem;
+  border-radius: 0.6rem;
+  background: rgba(140, 20, 10, 0.75);
+  border: 2px solid rgba(255, 90, 60, 0.9);
+  color: #ffe6e0;
+  font-weight: 900;
+  font-style: italic;
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  animation: wrong-way-pulse 0.7s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 14;
+}
+@keyframes wrong-way-pulse {
+  from { opacity: 0.65; transform: translateX(-50%) scale(0.98); }
+  to { opacity: 1; transform: translateX(-50%) scale(1.03); }
+}
+
+/* Podium-style result rows. */
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.35rem 0.9rem;
+  border-radius: 0.6rem;
+  list-style: none;
+}
+.result-medal { width: 2rem; text-align: center; font-size: 1.25rem; }
+.result-name { flex: 1; min-width: 9rem; }
+.result-time { font-variant-numeric: tabular-nums; color: #a7abb6; }
+.result-row.podium-1 { background: rgba(255, 200, 60, 0.14); border: 1px solid rgba(255, 200, 60, 0.4); }
+.result-row.podium-2 { background: rgba(200, 210, 225, 0.1); border: 1px solid rgba(200, 210, 225, 0.3); }
+.result-row.podium-3 { background: rgba(210, 140, 80, 0.12); border: 1px solid rgba(210, 140, 80, 0.35); }
+.result-row.me .result-name { color: #4dffb0; font-weight: 900; }
+
 /* --- Results / overlays --- */
 .race-results {
   position: absolute;
@@ -789,7 +831,8 @@ canvas {
 
 .race-results ol {
   margin: 0;
-  padding-left: 1.5rem;
+  padding-left: 0;
+  list-style: none;
   font-size: 1.15rem;
   font-weight: 700;
   color: #d7d9e0;
